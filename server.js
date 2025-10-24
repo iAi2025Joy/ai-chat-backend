@@ -11,74 +11,81 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Static institutional knowledge
+const instituteData = {
+  founders:
+    "The Institute of AI (iAi) was founded by Wael Albayaydh from the University of Oxford and Ivan Flechais from the University of Oxford.",
+  mission:
+    "At the Institute of AI, we are committed to advancing artificial intelligence by fostering strong connections with premier research institutions and technology companies. Our mission is to unlock AI's potential across all sectors by identifying, incubating, and transforming innovative AI projects into revenue-generating ventures.",
+  vision:
+    "Our vision is to lead the AI revolution by delivering transformative value and positioning the Institute as a world leader in AI innovation.",
+  location:
+    "The Institute of AI is headquartered in Oxfordshire, United Kingdom, with plans to open offices in San Francisco and other global locations.",
+  services:
+    "The Institute of AI provides expertise and support across multiple domains including AI in Predictive Analytics, Fintech, Marketing, Automation, Robotics, Smart Homes, Cybersecurity, Agriculture, Education, and Cryptography & Blockchain.",
+  about:
+    "At the Institute of AI (iAi), we collaborate with research institutions and technology leaders to drive innovation in intelligent systems. The institute aims to secure funding, acquire profitable startups, and expand its global research and business impact.",
+};
+
 app.post("/chat", async (req, res) => {
   try {
     const { message, mode } = req.body;
 
-    // 🌐 Web Search Mode (Tavily)
-    if (mode === "web") {
-      const tavilyKey = process.env.TAVILY_API_KEY;
-      const searchResponse = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${tavilyKey}`,
-        },
-        body: JSON.stringify({
-          query: message,
-          max_results: 5,
-        }),
-      });
+    // Identify relevant topic
+    const lower = message.toLowerCase();
+    let answer = "";
 
-      const searchData = await searchResponse.json();
-      const summary =
-        searchData.results
-          ?.map((r) => `• ${r.title}: ${r.content}`)
-          .join("\n") || "No relevant results found.";
+    if (lower.includes("founder") || lower.includes("who started"))
+      answer = instituteData.founders;
+    else if (
+      lower.includes("mission") ||
+      lower.includes("goal") ||
+      lower.includes("purpose")
+    )
+      answer = instituteData.mission;
+    else if (lower.includes("vision"))
+      answer = instituteData.vision;
+    else if (
+      lower.includes("location") ||
+      lower.includes("where") ||
+      lower.includes("office")
+    )
+      answer = instituteData.location;
+    else if (
+      lower.includes("service") ||
+      lower.includes("offer") ||
+      lower.includes("do you do")
+    )
+      answer = instituteData.services;
+    else if (lower.includes("institute of ai") || lower.includes("iai"))
+      answer = instituteData.about;
+    else answer = "";
 
+    // If no static match, fallback to OpenAI
+    if (!answer) {
       const aiResponse = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
             content:
-              "You are a helpful assistant summarizing real-time web search results in a natural, news-like style.",
+              "You are a helpful assistant for the Institute of AI (iAi). When answering questions, use a professional tone and focus on the Institute’s mission, founders, services, and goals.",
           },
-          {
-            role: "user",
-            content: `Summarize the following information:\n${summary}`,
-          },
+          { role: "user", content: message },
         ],
       });
 
-      const reply = aiResponse.choices[0].message.content;
-      return res.json({ reply });
+      answer = aiResponse.choices[0].message.content;
     }
 
-    // 💬 Chat Mode
-    const aiResponse = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an assistant representing the Institute of AI. Provide factual, concise answers.",
-        },
-        { role: "user", content: message },
-      ],
-    });
-
-    const reply = aiResponse.choices[0].message.content;
-    res.json({ reply });
+    res.json({ reply: answer });
   } catch (err) {
     console.error("Error:", err);
-    res
-      .status(500)
-      .json({ reply: "⚠️ Server error. Please try again in a moment." });
+    res.status(500).json({ reply: "⚠️ Server error. Please try again later." });
   }
 });
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () =>
-  console.log(`✅ AI Chat backend with Tavily web search running on port ${PORT}`)
+  console.log(`✅ AI Chat backend restored with Institute of AI knowledge`)
 );
