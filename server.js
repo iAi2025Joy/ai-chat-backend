@@ -11,51 +11,42 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Helper: extract meaningful text from DuckDuckGo results
-function extractDuckDuckGoSummary(data) {
-  if (data.AbstractText && data.AbstractText.trim().length > 0) {
-    return data.AbstractText;
-  }
-
-  // Look into related topics if abstract missing
-  if (Array.isArray(data.RelatedTopics)) {
-    for (const topic of data.RelatedTopics) {
-      if (topic.Text) return topic.Text;
-      if (topic.Topics && topic.Topics.length > 0 && topic.Topics[0].Text)
-        return topic.Topics[0].Text;
-    }
-  }
-
-  // As fallback, use heading or definition
-  return data.Heading || "No web results found.";
-}
-
 app.post("/chat", async (req, res) => {
   try {
     const { message, mode } = req.body;
 
+    // 🌐 Web Search Mode (Tavily)
     if (mode === "web") {
-      // 🔍 Query DuckDuckGo API
-      const searchResponse = await fetch(
-        `https://api.duckduckgo.com/?q=${encodeURIComponent(
-          message
-        )}&format=json&no_redirect=1&no_html=1`
-      );
-      const data = await searchResponse.json();
-      const summary = extractDuckDuckGoSummary(data);
+      const tavilyKey = process.env.TAVILY_API_KEY;
+      const searchResponse = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tavilyKey}`,
+        },
+        body: JSON.stringify({
+          query: message,
+          max_results: 5,
+        }),
+      });
 
-      // Ask OpenAI to summarize that
+      const searchData = await searchResponse.json();
+      const summary =
+        searchData.results
+          ?.map((r) => `• ${r.title}: ${r.content}`)
+          .join("\n") || "No relevant results found.";
+
       const aiResponse = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
             content:
-              "You are a helpful assistant summarizing real-time web search results.",
+              "You are a helpful assistant summarizing real-time web search results in a natural, news-like style.",
           },
           {
             role: "user",
-            content: `Summarize the following search information briefly and clearly:\n${summary}`,
+            content: `Summarize the following information:\n${summary}`,
           },
         ],
       });
@@ -64,14 +55,14 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply });
     }
 
-    // 🧠 Normal chat mode
+    // 💬 Chat Mode
     const aiResponse = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "You are a helpful assistant representing the Institute of AI.",
+            "You are an assistant representing the Institute of AI. Provide factual, concise answers.",
         },
         { role: "user", content: message },
       ],
@@ -89,5 +80,5 @@ app.post("/chat", async (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () =>
-  console.log(`✅ AI Chat backend with web search running on port ${PORT}`)
+  console.log(`✅ AI Chat backend with Tavily web search running on port ${PORT}`)
 );
