@@ -1,72 +1,72 @@
-// server.js
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
-import bodyParser from "body-parser";
 import OpenAI from "openai";
 
 const app = express();
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ✅ Main chat endpoint
 app.post("/chat", async (req, res) => {
   try {
     const { message, mode } = req.body;
 
-    // -----------------------------------------------
-    // 🌐 WEB SEARCH MODE
-    // -----------------------------------------------
+    // If mode is web search, do live DuckDuckGo fetch
     if (mode === "web") {
-      const searchUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(
-        message
-      )}&format=json&no_html=1&no_redirect=1`;
+      const searchResponse = await fetch(
+        `https://api.duckduckgo.com/?q=${encodeURIComponent(
+          message
+        )}&format=json&no_redirect=1&no_html=1`
+      );
+      const searchData = await searchResponse.json();
 
-      const response = await fetch(searchUrl);
-      const data = await response.json();
+      // Take top summary
+      const summary =
+        searchData.AbstractText ||
+        (searchData.RelatedTopics && searchData.RelatedTopics[0]?.Text) ||
+        "No web results found.";
 
-      let answer =
-        data.AbstractText ||
-        (data.RelatedTopics && data.RelatedTopics.length > 0
-          ? data.RelatedTopics[0].Text
-          : null);
-
-      if (!answer) answer = "No clear results found. Try rephrasing your query.";
-
-      return res.json({
-        reply: `🔎 Web Search Result:\n${answer}`,
+      // Ask OpenAI to summarize result briefly
+      const aiResponse = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an assistant that summarizes real-time web search results clearly and concisely.",
+          },
+          { role: "user", content: `Summarize this search result: ${summary}` },
+        ],
       });
+
+      const reply = aiResponse.choices[0].message.content;
+      return res.json({ reply });
     }
 
-    // -----------------------------------------------
-    // 💬 NORMAL CHAT MODE (OpenAI)
-    // -----------------------------------------------
-    const completion = await openai.chat.completions.create({
+    // Otherwise normal chat mode
+    const aiResponse = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "You are the Institute of AI chatbot. Answer questions about the Institute of AI accurately and professionally.",
+            "You are a helpful assistant representing the Institute of AI.",
         },
         { role: "user", content: message },
       ],
     });
 
-    const reply = completion.choices[0].message.content;
+    const reply = aiResponse.choices[0].message.content;
     res.json({ reply });
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ reply: "⚠️ Server error. Please try again later." });
+  } catch (err) {
+    console.error("Error:", err);
+    res.status(500).json({ reply: "Server error, please try again later." });
   }
 });
 
-// -----------------------------------------------
-// ✅ Start the server
-// -----------------------------------------------
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`✅ AI Chat backend running on port ${PORT}`));
