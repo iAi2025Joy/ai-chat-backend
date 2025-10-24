@@ -11,35 +11,52 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Helper: extract meaningful text from DuckDuckGo results
+function extractDuckDuckGoSummary(data) {
+  if (data.AbstractText && data.AbstractText.trim().length > 0) {
+    return data.AbstractText;
+  }
+
+  // Look into related topics if abstract missing
+  if (Array.isArray(data.RelatedTopics)) {
+    for (const topic of data.RelatedTopics) {
+      if (topic.Text) return topic.Text;
+      if (topic.Topics && topic.Topics.length > 0 && topic.Topics[0].Text)
+        return topic.Topics[0].Text;
+    }
+  }
+
+  // As fallback, use heading or definition
+  return data.Heading || "No web results found.";
+}
+
 app.post("/chat", async (req, res) => {
   try {
     const { message, mode } = req.body;
 
-    // If mode is web search, do live DuckDuckGo fetch
     if (mode === "web") {
+      // 🔍 Query DuckDuckGo API
       const searchResponse = await fetch(
         `https://api.duckduckgo.com/?q=${encodeURIComponent(
           message
         )}&format=json&no_redirect=1&no_html=1`
       );
-      const searchData = await searchResponse.json();
+      const data = await searchResponse.json();
+      const summary = extractDuckDuckGoSummary(data);
 
-      // Take top summary
-      const summary =
-        searchData.AbstractText ||
-        (searchData.RelatedTopics && searchData.RelatedTopics[0]?.Text) ||
-        "No web results found.";
-
-      // Ask OpenAI to summarize result briefly
+      // Ask OpenAI to summarize that
       const aiResponse = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
             content:
-              "You are an assistant that summarizes real-time web search results clearly and concisely.",
+              "You are a helpful assistant summarizing real-time web search results.",
           },
-          { role: "user", content: `Summarize this search result: ${summary}` },
+          {
+            role: "user",
+            content: `Summarize the following search information briefly and clearly:\n${summary}`,
+          },
         ],
       });
 
@@ -47,7 +64,7 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply });
     }
 
-    // Otherwise normal chat mode
+    // 🧠 Normal chat mode
     const aiResponse = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -64,9 +81,13 @@ app.post("/chat", async (req, res) => {
     res.json({ reply });
   } catch (err) {
     console.error("Error:", err);
-    res.status(500).json({ reply: "Server error, please try again later." });
+    res
+      .status(500)
+      .json({ reply: "⚠️ Server error. Please try again in a moment." });
   }
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`✅ AI Chat backend running on port ${PORT}`));
+app.listen(PORT, () =>
+  console.log(`✅ AI Chat backend with web search running on port ${PORT}`)
+);
