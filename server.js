@@ -38,6 +38,8 @@ const instituteData = {
     "The Institute of AI provides expertise and support across multiple domains including AI in Predictive Analytics, Fintech, Marketing, Automation, Robotics, Smart Homes, Cybersecurity, Agriculture, Education, and Cryptography & Blockchain.",
   about:
     "At the Institute of AI (iAi), we collaborate with research institutions and technology leaders to drive innovation in intelligent systems. The institute aims to secure funding, acquire profitable startups, and expand its global research and business impact. Learn more at https://www.institute-of-ai.org",
+  website:
+    " The website of the Institute of AI (iAi) is https://www.institute-of-ai.org",
 };
 
 app.post("/chat", async (req, res) => {
@@ -103,5 +105,6 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () =>
   console.log(`✅ AI Chat backend running with Institute of AI knowledge and link formatting`)
 );
+
 
 
