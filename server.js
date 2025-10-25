@@ -18,9 +18,11 @@ const openai = new OpenAI({
 
 // ✅ Converts plain URLs into clickable HTML hyperlinks
 function convertLinksToHTML(text) {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  return text.replace(urlRegex, '<a href="$1" target="_blank">$1</a>');
+  // Improved regex: avoids capturing trailing punctuation like ) , . etc.
+  const urlRegex = /(https?:\/\/[^\s)>,]+)/g;
+  return text.replace(urlRegex, '<a href="$1" target="_blank" style="color:#4ea3ff;text-decoration:underline;">$1</a>');
 }
+
 
 // Static institutional knowledge
 const instituteData = {
@@ -101,4 +103,5 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () =>
   console.log(`✅ AI Chat backend running with Institute of AI knowledge and link formatting`)
 );
+
 
