@@ -2,6 +2,12 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import OpenAI from "openai";
+import {
+  getGoldPredictionToolDefinition,
+  handleGoldPredictionCall,
+  handleGoldHistoryGet,
+  handleGoldPredictionUpdate,
+} from "./goldPrediction.js";
 
 const app = express();
 app.use(cors());
@@ -42,6 +48,11 @@ const instituteData = {
     " The website of the Institute of AI (iAi) is https://www.institute-of-ai.org",
 };
 
+// ✅ NEW: gold prediction data endpoints (called by the separate Python
+// prediction-updater cron job -- see gold_predictor_updater.py)
+app.get("/gold-history", handleGoldHistoryGet);
+app.post("/update-gold-prediction", handleGoldPredictionUpdate);
+
 app.post("/chat", async (req, res) => {
   try {
     const { message, mode } = req.body;
@@ -78,19 +89,51 @@ app.post("/chat", async (req, res) => {
 
     // If no static match, fallback to OpenAI
     if (!answer) {
-      const aiResponse = await openai.chat.completions.create({
+      const messages = [
+        {
+          role: "system",
+          content:
+            "You are a helpful assistant for the Institute of AI (iAi). When answering questions, use a professional tone and focus on the Institute's mission, founders, services, and goals. Include hyperlinks when relevant. If asked about gold prices, use the get_gold_prediction function -- and always state clearly that this is a statistical estimate, not financial advice.",
+        },
+        { role: "user", content: message },
+      ];
+
+      // ✅ NEW: give the model access to the gold prediction function
+      const tools = [getGoldPredictionToolDefinition()];
+
+      let aiResponse = await openai.chat.completions.create({
         model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a helpful assistant for the Institute of AI (iAi). When answering questions, use a professional tone and focus on the Institute’s mission, founders, services, and goals. Include hyperlinks when relevant.",
-          },
-          { role: "user", content: message },
-        ],
+        messages,
+        tools,
       });
 
-      answer = aiResponse.choices[0].message.content;
+      let responseMessage = aiResponse.choices[0].message;
+
+      // ✅ NEW: if the model decided to call get_gold_prediction, run it
+      // and make a second call so the model can compose the final answer
+      // using the real prediction data.
+      if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+        messages.push(responseMessage);
+
+        for (const toolCall of responseMessage.tool_calls) {
+          if (toolCall.function.name === "get_gold_prediction") {
+            const toolResult = handleGoldPredictionCall(toolCall.function.arguments);
+            messages.push({
+              role: "tool",
+              tool_call_id: toolCall.id,
+              content: toolResult,
+            });
+          }
+        }
+
+        aiResponse = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages,
+        });
+        responseMessage = aiResponse.choices[0].message;
+      }
+
+      answer = responseMessage.content;
     }
 
     // ✅ Send formatted HTML reply (with clickable links)
@@ -105,6 +148,3 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () =>
   console.log(`✅ AI Chat backend running with Institute of AI knowledge and link formatting`)
 );
-
-
-
