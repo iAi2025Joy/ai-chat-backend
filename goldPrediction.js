@@ -14,13 +14,22 @@ export const goldPredictionTool = {
 };
 
 export async function handleGoldPrediction() {
-const RAW_JSON_URL = "https://raw.githubusercontent.com/iAi2025Joy/gold-predictor/main/gold_prediction_latest.json";
+  // Cache buster forces GitHub's raw CDN to deliver the latest file immediately
+  const cacheBuster = Date.now();
+  const RAW_JSON_URL = `https://raw.githubusercontent.com/iAi2025Joy/gold-predictor/main/gold_prediction_latest.json?t=${cacheBuster}`;
 
   try {
-    const response = await fetch(RAW_JSON_URL, { cache: "no-store" });
+    const response = await fetch(RAW_JSON_URL, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      }
+    });
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
+    
     const data = await response.json();
 
     return JSON.stringify({
@@ -28,6 +37,8 @@ const RAW_JSON_URL = "https://raw.githubusercontent.com/iAi2025Joy/gold-predicto
       direction: data.prediction_direction,
       winProbability: data.win_probability,
       targetPrice: data.target_price,
+      dxyIndex: data.dxy_index,
+      us10yYield: data.us10y_yield,
       newsSentiment: data.news_sentiment,
       sentimentScore: data.sentiment_score,
       topHeadlines: data.top_headlines,
