@@ -14,7 +14,7 @@ export const goldPredictionTool = {
 };
 
 export async function handleGoldPrediction() {
-const RAW_JSON_URL = "https://raw.githubusercontent.com/iAi2025Joy/ai-chat-backend/main/gold_prediction_latest.json";
+const RAW_JSON_URL = "https://raw.githubusercontent.com/iAi2025Joy/gold-predictor/main/gold_prediction_latest.json";
 
   try {
     const response = await fetch(RAW_JSON_URL, { cache: "no-store" });
