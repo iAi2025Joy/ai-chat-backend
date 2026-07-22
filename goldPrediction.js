@@ -14,7 +14,7 @@ export const goldPredictionTool = {
 };
 
 export async function handleGoldPrediction() {
-  // Cache buster forces GitHub's raw CDN to deliver the latest file immediately
+  // Cache buster guarantees fresh data by bypassing GitHub's raw CDN cache
   const cacheBuster = Date.now();
   const RAW_JSON_URL = `https://raw.githubusercontent.com/iAi2025Joy/gold-predictor/main/gold_prediction_latest.json?t=${cacheBuster}`;
 
@@ -32,22 +32,25 @@ export async function handleGoldPrediction() {
     
     const data = await response.json();
 
+    // Pass structured data directly to OpenAI
     return JSON.stringify({
-      currentPrice: data.current_price,
-      direction: data.prediction_direction,
-      winProbability: data.win_probability,
-      targetPrice: data.target_price,
-      dxyIndex: data.dxy_index,
-      us10yYield: data.us10y_yield,
-      newsSentiment: data.news_sentiment,
-      sentimentScore: data.sentiment_score,
-      topHeadlines: data.top_headlines,
-      lastUpdated: data.timestamp
+      status: "success",
+      current_price_usd: data.current_price,
+      predicted_direction: data.prediction_direction,
+      win_probability_confidence: data.win_probability,
+      target_price_usd: data.target_price,
+      dxy_index: data.dxy_index || "N/A",
+      us10y_yield: data.us10y_yield || "N/A",
+      macro_news_sentiment: data.news_sentiment,
+      sentiment_score: data.sentiment_score,
+      key_headlines: data.top_headlines,
+      last_updated_timestamp: data.timestamp
     });
   } catch (error) {
     console.error("Error fetching gold prediction:", error);
     return JSON.stringify({
-      error: "Unable to retrieve real-time prediction data at this moment."
+      status: "error",
+      message: "Unable to retrieve real-time prediction data at this moment."
     });
   }
 }
