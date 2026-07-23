@@ -1,0 +1,19 @@
+{
+  "name": "ai-chat-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": "^18 || ^20"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2",
+    "openai": "^4.27.0",
+    "node-fetch": "^3.3.2"
+  }
+}
