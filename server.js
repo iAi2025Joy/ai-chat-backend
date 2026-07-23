@@ -13,6 +13,10 @@ import {
   handleWebSearchCall,
 } from "./webSearch.js";
 import { getLiveGoldPriceToolDefinition, handleLiveGoldPriceCall } from "./liveGoldPrice.js";
+import {
+  getGoldPriceHistoryToolDefinition,
+  handleGoldPriceHistoryCall,
+} from "./goldPriceHistory.js";
 
 const app = express();
 app.use(cors());
@@ -39,10 +43,11 @@ function convertLinksToHTML(text) {
 }
 
 // ✅ Converts GPT's typical markdown-style output (bold, bullet lists,
-// numbered lists, line breaks, and now ```mermaid fenced diagram blocks)
-// into HTML the frontend can actually render, since the chat widget
-// displays replies via innerHTML but GPT commonly defaults to markdown
-// syntax unless the raw text is converted first.
+// numbered lists, line breaks, ```mermaid fenced diagram blocks, and now
+// ```chart fenced price-history blocks) into HTML the frontend can
+// actually render, since the chat widget displays replies via innerHTML
+// but GPT commonly defaults to markdown syntax unless the raw text is
+// converted first.
 function formatMarkdownToHTML(text) {
   if (!text) return text;
 
@@ -53,13 +58,48 @@ function formatMarkdownToHTML(text) {
   // below. Replaced with placeholder tokens, restored after everything
   // else is processed.
   const mermaidBlocks = [];
-  const textWithPlaceholders = text.replace(
+  let textWithPlaceholders = text.replace(
     /```mermaid\s*\n([\s\S]*?)```/g,
     (match, diagramCode) => {
       const placeholder = `@@MERMAID_BLOCK_${mermaidBlocks.length}@@`;
       // The frontend looks for elements with class="mermaid" and renders
       // them via the Mermaid.js library loaded on the page.
       mermaidBlocks.push(`<div class="mermaid">${diagramCode.trim()}</div>`);
+      return placeholder;
+    }
+  );
+
+  // ✅ NEW: Extract ```chart ... ``` fenced blocks the same way, BEFORE
+  // line-by-line processing, for the same reason (the content inside is a
+  // single JSON object, not text meant to be turned into paragraphs/lists).
+  // Emits a placeholder <div class="price-chart" data-chart="...escaped
+  // JSON..."> that the frontend picks up and renders into a real Chart.js
+  // line chart, the same "backend emits a marker div, frontend does the
+  // actual rendering" pattern already used for Mermaid.
+  const chartBlocks = [];
+  textWithPlaceholders = textWithPlaceholders.replace(
+    /```chart\s*\n([\s\S]*?)```/g,
+    (match, chartJsonRaw) => {
+      const placeholder = `@@CHART_BLOCK_${chartBlocks.length}@@`;
+      let safeJson = "{}";
+      try {
+        // Validate it's real JSON before trusting it, and re-serialize so
+        // formatting from the model doesn't matter -- then HTML-attribute-
+        // escape it so it survives being placed inside data-chart="...".
+        const parsedChart = JSON.parse(chartJsonRaw.trim());
+        safeJson = JSON.stringify(parsedChart)
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      } catch (err) {
+        console.error("Failed to parse ```chart block JSON from model output:", err.message);
+        chartBlocks.push(`<p><em>(Chart could not be displayed -- invalid chart data.)</em></p>`);
+        return placeholder;
+      }
+      chartBlocks.push(
+        `<div class="price-chart" data-chart="${safeJson}"><canvas></canvas></div>`
+      );
       return placeholder;
     }
   );
@@ -81,6 +121,7 @@ function formatMarkdownToHTML(text) {
   for (const rawLine of lines) {
     const line = rawLine.trim();
     const mermaidPlaceholderMatch = line.match(/^@@MERMAID_BLOCK_(\d+)@@$/);
+    const chartPlaceholderMatch = line.match(/^@@CHART_BLOCK_(\d+)@@$/);
     const headingMatch = line.match(/^(#{1,3})\s+(.*)/);
     const bulletMatch = line.match(/^[-*]\s+(.*)/);
     const numberedMatch = line.match(/^\d+\.\s+(.*)/);
@@ -88,6 +129,9 @@ function formatMarkdownToHTML(text) {
     if (mermaidPlaceholderMatch) {
       flushList();
       htmlParts.push(mermaidBlocks[parseInt(mermaidPlaceholderMatch[1], 10)]);
+    } else if (chartPlaceholderMatch) {
+      flushList();
+      htmlParts.push(chartBlocks[parseInt(chartPlaceholderMatch[1], 10)]);
     } else if (headingMatch) {
       flushList();
       const level = headingMatch[1].length; // 1, 2, or 3 '#' characters
@@ -140,8 +184,9 @@ const instituteData = {
 };
 
 // (No custom gold-data routes needed anymore -- the chatbot fetches
-// prediction data directly from the gold-predictor GitHub repo's raw
-// URL each time, inside handleGoldPredictionCall.)
+// prediction and history data directly from the gold-predictor GitHub
+// repo's raw URLs each time, inside handleGoldPredictionCall and
+// handleGoldPriceHistoryCall.)
 
 app.post("/chat", async (req, res) => {
   try {
@@ -191,7 +236,7 @@ app.post("/chat", async (req, res) => {
 
     // If no static match, fallback to OpenAI
     if (!answer) {
-      // ✅ NEW: real web search when the user selected "Web Search" mode.
+      // ✅ Real web search when the user selected "Web Search" mode.
       // Runs BEFORE the OpenAI call, injecting real, current search
       // results as context so GPT answers from actual retrieved
       // information instead of its own (possibly stale) training
@@ -221,6 +266,7 @@ app.post("/chat", async (req, res) => {
           content:
             "You are a helpful assistant for the Institute of AI (iAi). When answering questions, use a professional tone and focus on the Institute's mission, founders, services, and goals. The Institute of AI's official website is exactly https://www.institute-of-ai.org -- always use this exact URL if you mention the website; never guess or use a different one. Format your responses using markdown-style formatting where it helps readability: **bold** for emphasis, and \"- \" at the start of a line for bullet points (one item per line) when listing multiple things. For longer or multi-part answers, structure them with headings: use a single \"# \" heading only for a genuine overall title (rare -- most answers don't need one), \"## \" for section headings dividing distinct topics within one answer, and \"### \" for sub-points within a section. Do NOT use headings for short, simple, conversational answers (a one- or two-sentence reply should just be plain text/paragraphs, not a heading) -- reserve headings for answers that genuinely have multiple distinct parts worth visually separating. " +
             "DIAGRAMS: when explaining a process, sequence of steps, hierarchy, decision flow, or relationship between things, you can include a diagram using Mermaid syntax in a fenced code block starting with ```mermaid and ending with ```. Use this ONLY when a visual structure genuinely aids understanding (a process with several steps, a decision tree, an org/hierarchy structure) -- NOT for simple factual answers or short conversational replies. Common Mermaid syntax: for a process flow, use \"flowchart TD\" (top-down) followed by lines like \"A[Step one] --> B[Step two]\"; for a decision with branches, use \"A{Decision?} -->|Yes| B[Outcome 1]\" and \"A -->|No| C[Outcome 2]\"; for a hierarchy, use \"A --> B\" and \"A --> C\" to show B and C as children of A. CRITICAL SYNTAX RULE (a confirmed real cause of rendering failures): if a node's label contains parentheses, chemical formulas, commas, colons, or any special character, you MUST wrap the entire label in double quotes, e.g. B[\"Glucose (C6H12O6)\"] not B[Glucose (C6H12O6)] -- the unquoted form breaks the parser. When in doubt, wrap ALL node labels in double quotes to be safe, and keep labels short and simple rather than descriptive. Keep diagrams simple (typically 4-8 nodes) and always include a brief text explanation alongside the diagram, not just the diagram alone. " +
+            "PRICE CHARTS: when the user wants to SEE gold's recent price trend as a chart/graph/line diagram (e.g. 'draw a line chart of gold prices for the last 24 hours', 'show me how gold moved today', 'plot the last day's prices'), call the get_gold_price_history function first to get REAL data -- never fabricate price history from memory. Then present it using a fenced code block starting with ```chart and ending with ```, containing ONLY a single valid JSON object with this exact shape: {\"title\": \"Gold Price - Last 24 Hours (USD/oz)\", \"labels\": [\"Jul 22, 14:00\", \"Jul 22, 15:44\", ...], \"data\": [4126.93, 4131.53, ...]} -- labels and data must be the same length and in the same order as the real points returned by the function. This is a DIFFERENT tool and DIFFERENT block format from the prediction tool and the mermaid diagrams above -- do not mix them up, and do not use a ```chart block for anything other than real historical price data returned by get_gold_price_history. Always include a short sentence of text alongside the chart (e.g. the actual date range it covers, and a note that this is historical data, not a prediction). " +
             "If asked about gold prices, use the get_gold_prediction function -- and always state clearly that this is a statistical estimate, not financial advice. You have access to the recent conversation history -- use it naturally, e.g. resolve pronouns and follow-up questions ('what about next week', 'why', 'tell me more') using what was actually said earlier in this conversation, rather than treating every message as if it's the first one.",
         },
         ...(searchContextMessage ? [searchContextMessage] : []),
@@ -228,8 +274,14 @@ app.post("/chat", async (req, res) => {
         { role: "user", content: message },
       ];
 
-      // ✅ NEW: give the model access to the gold prediction function
-      const tools = [getGoldPredictionToolDefinition(), getWebSearchToolDefinition(), getLiveGoldPriceToolDefinition()];
+      // ✅ Give the model access to the gold prediction, web search, live
+      // price, and (new) price history functions.
+      const tools = [
+        getGoldPredictionToolDefinition(),
+        getWebSearchToolDefinition(),
+        getLiveGoldPriceToolDefinition(),
+        getGoldPriceHistoryToolDefinition(),
+      ];
 
       let aiResponse = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -239,9 +291,10 @@ app.post("/chat", async (req, res) => {
 
       let responseMessage = aiResponse.choices[0].message;
 
-      // ✅ NEW: if the model decided to call get_gold_prediction or
-      // search_web, run whichever was requested and make a second call
-      // so the model can compose the final answer using the real data.
+      // ✅ If the model decided to call get_gold_prediction, search_web,
+      // get_live_gold_price, or (new) get_gold_price_history, run whichever
+      // was requested and make a second call so the model can compose the
+      // final answer using the real data.
       if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
         messages.push(responseMessage);
 
@@ -253,6 +306,8 @@ app.post("/chat", async (req, res) => {
             toolResult = await handleWebSearchCall(toolCall.function.arguments);
           } else if (toolCall.function.name === "get_live_gold_price") {
             toolResult = await handleLiveGoldPriceCall();
+          } else if (toolCall.function.name === "get_gold_price_history") {
+            toolResult = await handleGoldPriceHistoryCall(toolCall.function.arguments);
           } else {
             toolResult = JSON.stringify({ error: `Unknown tool: ${toolCall.function.name}` });
           }
