@@ -481,6 +481,14 @@ function getRenderChartToolDefinition() {
             },
           },
           yAxisLabel: { type: "string", description: "Optional y-axis label for line/bar charts, e.g. 'USD/oz' or 'Percent'. Omit for pie/venn." },
+          threeD: {
+            type: "boolean",
+            description: "For type 'bar' ONLY. Set true only when the user explicitly asks for a 3D / 3-dimensional bar chart -- renders each bar with a shaded top and side face for a real extruded 3D look, instead of a normal flat bar. Defaults to false (normal flat bars) otherwise -- do not set this unless 3D was actually requested. Ignored for line/pie/venn.",
+          },
+          pieSliceLabels: {
+            type: "boolean",
+            description: "For type 'pie' ONLY. Set true only when the user explicitly asks to show each slice's value/number, or to add arrows/labels pointing to each slice. Draws a leader-line arrow from each slice to its real value and percentage of the total. Defaults to false (a normal plain pie chart with just a legend) otherwise -- do not set this unless it was actually requested. Ignored for line/bar/venn.",
+          },
           sets: {
             type: "array",
             description: "REQUIRED for type 'venn' only, ignored otherwise. Exactly 2 or 3 sets to compare.",
@@ -663,7 +671,7 @@ function handleRenderChartCall(argsJson) {
     return { toolResult: JSON.stringify({ error: "type must be 'line', 'bar', or 'pie'." }), chartHtml: null };
   }
 
-  const { title, labels, data, series, yAxisLabel } = args;
+  const { title, labels, data, series, yAxisLabel, threeD, pieSliceLabels } = args;
 
   if (!Array.isArray(labels) || labels.length === 0) {
     console.error("render_chart: validation failed (missing/empty labels).", "raw args:", JSON.stringify(args));
@@ -727,6 +735,7 @@ function handleRenderChartCall(argsJson) {
       labels: finalLabels,
       series: finalSeries,
       yAxisLabel: yAxisLabel || undefined,
+      threeD: type === "bar" ? !!threeD : undefined,
     });
 
     console.log(
@@ -801,6 +810,8 @@ function handleRenderChartCall(argsJson) {
     labels: finalLabels,
     data: sanitizedData,
     yAxisLabel: yAxisLabel || undefined,
+    threeD: type === "bar" ? !!threeD : undefined,
+    pieSliceLabels: type === "pie" ? !!pieSliceLabels : undefined,
   });
 
   // A confirmed real gap this fixes: only failure paths were logged
