@@ -1073,6 +1073,34 @@ app.post("/transcribe", rateLimitChat, async (req, res) => {
   }
 });
 
+// ------------------------------------------------------------------
+// EXTRACT DOCUMENT TEXT (standalone) -- lets a document attached
+// DURING an active Live Chat voice session get read into that SAME
+// live conversation. The Realtime API's own live session is a
+// completely separate conversation from /chat (a different model, a
+// different transport -- WebRTC audio/data channel, not this HTTP
+// endpoint), so a document sent through /chat's own extraction would
+// never actually reach what's being spoken about live. Reuses the
+// exact same extractDocumentsText() module already proven working for
+// /chat (see documentParser.js) -- just returns the plain text here
+// instead of folding it into a /chat system prompt, so the frontend can
+// inject it directly into the live session via the Realtime data
+// channel (conversation.item.create) instead.
+// ------------------------------------------------------------------
+app.post("/extract-document-text", rateLimitChat, async (req, res) => {
+  try {
+    const { documents } = req.body;
+    if (!Array.isArray(documents) || documents.length === 0) {
+      return res.status(400).json({ error: "No documents provided." });
+    }
+    const text = await extractDocumentsText(documents);
+    res.json({ text: text || "" });
+  } catch (err) {
+    console.error("Document extraction (standalone) error:", err.message);
+    res.status(500).json({ error: "Could not read that document. Please try again." });
+  }
+});
+
 // ElevenLabs routes (/elevenlabs-voices, /elevenlabs-speak) removed --
 // the subscription was cancelled and nothing in the frontend calls
 // these anymore (Listen/Live Chat speech now use the browser's own
