@@ -24,11 +24,26 @@ const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
  * Transcribes a single audio clip.
  * @param {{ name?: string, data: string }} audio - data is a base64 data
  *   URL, e.g. "data:audio/webm;codecs=opus;base64,...."
+ * @param {string|null} [languageHint] - optional ISO-639-1 code (e.g.
+ *   "en", "ar") to bias Whisper toward a known spoken language. A
+ *   confirmed real bug this fixes: with no hint at all, Whisper must
+ *   guess the spoken language from the audio alone on every single
+ *   call, and on short or acoustically ambiguous clips it can and does
+ *   guess wrong -- producing a transcript in a completely different
+ *   language/script than what was actually said (e.g. English audio
+ *   coming back as Arabic text; a wrong guess, not a translation).
+ *   When the caller knows the person's usual speaking language (see the
+ *   frontend's Speaking Language setting), passing it here skips that
+ *   guesswork for THIS call. Left undefined/null when the caller
+ *   genuinely wants full auto-detection (Speaking Language set to
+ *   "auto" specifically to support switching between languages) -- this
+ *   is a per-call hint, not a hard requirement, so omitting it preserves
+ *   the existing any-language behavior exactly.
  * @returns {Promise<{text: string, language: string|null}>} the
  *   transcribed text and Whisper's own detected source language (a full
  *   English name like "english"/"arabic", or null if undetected)
  */
-export async function transcribeAudio(audio) {
+export async function transcribeAudio(audio, languageHint) {
   if (!audio || typeof audio.data !== "string") {
     throw new Error("No audio data provided.");
   }
@@ -55,6 +70,7 @@ export async function transcribeAudio(audio) {
     file,
     model: "whisper-1",
     response_format: "verbose_json",
+    ...(languageHint ? { language: languageHint } : {}),
   });
 
   // verbose_json includes Whisper's own detected source language as a

@@ -448,7 +448,7 @@ function getRenderChartToolDefinition() {
     function: {
       name: "render_chart",
       description:
-        "Render a real chart or diagram for the user using data you actually have -- from a tool result (get_gold_price_history, search_web, fetch_web_page) or genuinely well-known facts. This DIRECTLY renders it for the user automatically -- do NOT also try to write a ```chart fenced code block or repeat the raw data yourself; just call this function, then continue your response normally (a short sentence of context is enough -- the visual appears automatically, you don't need to describe how it could be visualized, just render it). Use 'line' for a trend over time (e.g. price history), 'bar' for comparing several items, 'pie' for parts of a whole/percentages that add up to ~100%, 'venn' for showing overlap between 2 or 3 groups/categories (e.g. 'countries that speak French vs Spanish vs both', 'skills shared between two job roles'). For 'venn', use the 'sets' parameter instead of labels/data -- give each set's label and its actual real members as a list of strings; the overlaps are computed automatically from what's actually shared between the lists, don't calculate overlap counts yourself. NEVER invent or estimate numbers/items just to have something to chart -- only call this with real data.",
+        "Render a real chart or diagram for the user using data you actually have -- from a tool result (get_gold_price_history, search_web, fetch_web_page) or genuinely well-known facts. This DIRECTLY renders it for the user automatically -- do NOT also try to write a ```chart fenced code block or repeat the raw data yourself; just call this function, then continue your response normally (a short sentence of context is enough -- the visual appears automatically, you don't need to describe how it could be visualized, just render it). Use 'line' for a trend over time (e.g. price history), 'bar' for comparing several items, 'pie' for parts of a whole/percentages that add up to ~100%, 'venn' for showing overlap between 2 or 3 groups/categories (e.g. 'countries that speak French vs Spanish vs both', 'skills shared between two job roles'). For 'venn', use the 'sets' parameter instead of labels/data -- give each set's label and its actual real members as a list of strings; the overlaps are computed automatically from what's actually shared between the lists, don't calculate overlap counts yourself. MULTIPLE BARS/LINES PER CATEGORY (e.g. comparing Revenue AND Net Profit for each year, side by side): use the 'series' parameter instead of 'data' -- one entry per metric, each with its own name and full array of values (still aligned to the same 'labels' array). Do NOT try to fake multiple bars per label by only using 'data' -- 'data' is a single series and can only ever produce ONE bar/point per label; 'series' is required any time the user asks for more than one bar, line, or value per category. NEVER invent or estimate numbers/items just to have something to chart -- only call this with real data.",
       parameters: {
         type: "object",
         properties: {
@@ -457,12 +457,28 @@ function getRenderChartToolDefinition() {
           labels: {
             type: "array",
             items: { type: "string" },
-            description: "For line/bar/pie only: category/x-axis labels, e.g. ['Primary', 'Secondary', 'Tertiary'] or dates for a line chart. Must be the same length as data. Not used for 'venn' -- use 'sets' instead.",
+            description: "For line/bar/pie only: category/x-axis labels, e.g. ['Primary', 'Secondary', 'Tertiary'] or dates for a line chart. Must be the same length as data (or as each series' data, if using 'series'). Not used for 'venn' -- use 'sets' instead.",
           },
           data: {
             type: "array",
             items: { type: "number" },
-            description: "For line/bar/pie only: the real numeric values, same order and same length as labels. Not used for 'venn' -- use 'sets' instead.",
+            description: "For a SINGLE series only (one bar/point per label) on line/bar/pie -- the real numeric values, same order and same length as labels. If you need more than one bar/line per label (e.g. comparing multiple metrics side by side), use 'series' instead of this. Not used for 'venn' -- use 'sets' instead. Not used for pie combined with 'series' -- pie only ever has one series.",
+          },
+          series: {
+            type: "array",
+            description: "For 'line' or 'bar' ONLY, when comparing MORE THAN ONE metric per label (e.g. Revenue and Net Profit for each year, shown as multiple bars per year, or multiple lines over time). Each entry is one full series -- do not use together with 'data'; use one or the other. Ignored for 'pie'/'venn'.",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "This series' name, e.g. 'Revenue' or 'Net Profit' -- shown in the chart legend." },
+                data: {
+                  type: "array",
+                  items: { type: "number" },
+                  description: "This series' real numeric values, same order and same length as 'labels'.",
+                },
+              },
+              required: ["name", "data"],
+            },
           },
           yAxisLabel: { type: "string", description: "Optional y-axis label for line/bar charts, e.g. 'USD/oz' or 'Percent'. Omit for pie/venn." },
           sets: {
@@ -584,6 +600,46 @@ function handleVennChartCall(args) {
   };
 }
 
+// Sanitizes and validates ONE array of chart values -- shared by both
+// the single-series ('data') and multi-series ('series[].data') paths
+// below so they can't drift into different validation behavior. Same
+// fix as before: strips $, commas, and whitespace before parsing, then
+// confirms every value is a real finite number, returning which
+// specific indexes failed (if any) so the caller can build a clear
+// error message rather than silently shipping invisible bars.
+function sanitizeChartValues(values) {
+  const sanitized = values.map((v) => {
+    if (typeof v === "number") return v;
+    const cleaned = String(v).replace(/[$,\s]/g, "");
+    return Number(cleaned);
+  });
+  const badIndexes = sanitized
+    .map((v, i) => (Number.isFinite(v) ? null : i))
+    .filter((i) => i !== null);
+  return { sanitized, badIndexes };
+}
+
+// Reconciles a labels array against one or more same-length data arrays
+// -- generalizes the earlier single-series off-by-one auto-correct (see
+// its own original comment history) to cover any number of arrays at
+// once, since multi-series charts need every series to end up the SAME
+// final length as labels, not each independently truncated to a
+// possibly different length. Returns { finalLen, error }; error is null
+// on success.
+function reconcileChartLengths(labelsLength, dataLengths) {
+  const allLengths = [labelsLength, ...dataLengths];
+  const minLen = Math.min(...allLengths);
+  const maxLen = Math.max(...allLengths);
+  if (minLen === 0) return { finalLen: 0, error: "labels and data must all be non-empty arrays." };
+  if (maxLen - minLen > 2) {
+    return {
+      finalLen: 0,
+      error: `labels and data (or every series' data) must be arrays of the same length -- got lengths ${allLengths.join(", ")}.`,
+    };
+  }
+  return { finalLen: minLen, error: null };
+}
+
 function handleRenderChartCall(argsJson) {
   let args = {};
   try {
@@ -602,63 +658,110 @@ function handleRenderChartCall(argsJson) {
     return handleVennChartCall(args);
   }
 
-  const { title, labels, data, yAxisLabel } = args;
-
-  if (!Array.isArray(labels) || !Array.isArray(data) || labels.length === 0 || data.length === 0) {
-    console.error(
-      "render_chart: validation failed (missing/empty labels or data).",
-      "labels:", Array.isArray(labels) ? labels.length : typeof labels,
-      "data:", Array.isArray(data) ? data.length : typeof data,
-      "raw args:", JSON.stringify(args)
-    );
-    return {
-      toolResult: JSON.stringify({ error: "labels and data must both be non-empty arrays." }),
-      chartHtml: null,
-    };
-  }
-
-  // A confirmed real, REPEATABLE pattern from real Render logs: the
-  // model consistently sends exactly one more label than data point for
-  // a multi-year range (e.g. 21 year-labels for a 20-year span, but only
-  // 20 actual values) -- an off-by-one in its own year-counting, not a
-  // sign it's not calling the tool or lacking real data. The earlier
-  // strict "must be exactly equal" check rejected every single one of
-  // these attempts outright, and forcing a retry with the same
-  // instructions just reproduced the identical off-by-one every time
-  // (confirmed: 3 retries in the same log, same exact mismatch each
-  // time) -- so rejecting was never going to self-correct on its own.
-  // A small mismatch here is auto-corrected by truncating both arrays to
-  // the shorter length, rather than failing a chart outright over an
-  // easily-fixed off-by-one. Only a LARGER mismatch (more likely an
-  // actual data problem, not just a counting slip) still fails.
-  let finalLabels = labels;
-  let finalData = data;
-  if (labels.length !== data.length) {
-    const minLen = Math.min(labels.length, data.length);
-    if (Math.abs(labels.length - data.length) <= 2 && minLen > 0) {
-      console.error(
-        `render_chart: auto-correcting labels/data length mismatch (labels: ${labels.length}, data: ${data.length}) by truncating both to ${minLen}.`,
-        "raw args:", JSON.stringify(args)
-      );
-      finalLabels = labels.slice(0, minLen);
-      finalData = data.slice(0, minLen);
-    } else {
-      console.error(
-        "render_chart: validation failed (labels/data mismatch too large to auto-correct).",
-        "labels:", labels.length, "data:", data.length,
-        "raw args:", JSON.stringify(args)
-      );
-      return {
-        toolResult: JSON.stringify({ error: "labels and data must be arrays of the same length." }),
-        chartHtml: null,
-      };
-    }
-  }
-
   if (!["line", "bar", "pie"].includes(type)) {
     console.error("render_chart: invalid type.", "received type:", JSON.stringify(args.type), "raw args:", JSON.stringify(args));
     return { toolResult: JSON.stringify({ error: "type must be 'line', 'bar', or 'pie'." }), chartHtml: null };
   }
+
+  const { title, labels, data, series, yAxisLabel } = args;
+
+  if (!Array.isArray(labels) || labels.length === 0) {
+    console.error("render_chart: validation failed (missing/empty labels).", "raw args:", JSON.stringify(args));
+    return { toolResult: JSON.stringify({ error: "labels must be a non-empty array." }), chartHtml: null };
+  }
+
+  // MULTI-SERIES PATH -- a confirmed real bug this fixes: asked for
+  // multiple bars per category (e.g. Revenue AND Net Profit per year,
+  // shown side by side), GPT's text claimed multiple bars but the chart
+  // only ever showed ONE bar per year -- because the tool had no field
+  // that could carry more than one value per label at all. 'series' is
+  // that field: each entry is validated and sanitized the same way the
+  // old single 'data' array was, just once per series.
+  if (Array.isArray(series) && series.length > 0) {
+    if (type === "pie") {
+      console.error("render_chart: 'series' is not supported for type 'pie'.", "raw args:", JSON.stringify(args));
+      return {
+        toolResult: JSON.stringify({ error: "'series' (multiple datasets) is only supported for 'line' and 'bar', not 'pie' -- a pie chart is always a single series. Use 'data' for a pie chart instead." }),
+        chartHtml: null,
+      };
+    }
+    for (const s of series) {
+      if (!s || typeof s.name !== "string" || !Array.isArray(s.data)) {
+        console.error("render_chart: validation failed -- each series needs a 'name' string and a 'data' array.", "raw args:", JSON.stringify(args));
+        return {
+          toolResult: JSON.stringify({ error: "Each entry in 'series' needs a 'name' string and a 'data' array." }),
+          chartHtml: null,
+        };
+      }
+    }
+
+    const { finalLen, error: lenError } = reconcileChartLengths(labels.length, series.map((s) => s.data.length));
+    if (lenError) {
+      console.error("render_chart: series length reconciliation failed.", lenError, "raw args:", JSON.stringify(args));
+      return { toolResult: JSON.stringify({ error: lenError }), chartHtml: null };
+    }
+
+    const finalLabels = labels.slice(0, finalLen);
+    const finalSeries = [];
+    for (const s of series) {
+      const { sanitized, badIndexes } = sanitizeChartValues(s.data.slice(0, finalLen));
+      if (badIndexes.length > 0) {
+        console.error(
+          `render_chart: validation failed (non-numeric values in series "${s.name}").`,
+          "bad indexes:", badIndexes,
+          "raw args:", JSON.stringify(args)
+        );
+        return {
+          toolResult: JSON.stringify({
+            error: `Series "${s.name}" contains values that aren't real numbers: ${badIndexes.map((i) => JSON.stringify(s.data[i])).join(", ")}. Call render_chart again with plain numeric values in every series (no currency symbols, no thousands separators).`,
+          }),
+          chartHtml: null,
+        };
+      }
+      finalSeries.push({ name: s.name, data: sanitized });
+    }
+
+    const chartHtml = buildChartDivHtml({
+      title: title || "",
+      type,
+      labels: finalLabels,
+      series: finalSeries,
+      yAxisLabel: yAxisLabel || undefined,
+    });
+
+    console.log(
+      `render_chart: SUCCESS (multi-series). type=${type}, seriesCount=${finalSeries.length}, points=${finalLabels.length}, title=${JSON.stringify(title || "")}, chartHtml_length=${chartHtml.length}`
+    );
+
+    return {
+      toolResult: JSON.stringify({
+        success: true,
+        note: "Multi-series chart created and will be shown to the user automatically. Do not also write a ```chart block or repeat this data yourself -- just continue your response normally.",
+      }),
+      chartHtml,
+    };
+  }
+
+  // SINGLE-SERIES PATH (legacy 'data' array, one bar/point per label).
+  if (!Array.isArray(data) || data.length === 0) {
+    console.error(
+      "render_chart: validation failed (missing/empty data, and no 'series' provided).",
+      "data:", Array.isArray(data) ? data.length : typeof data,
+      "raw args:", JSON.stringify(args)
+    );
+    return {
+      toolResult: JSON.stringify({ error: "data must be a non-empty array (or use 'series' for multiple datasets)." }),
+      chartHtml: null,
+    };
+  }
+
+  const { finalLen, error: lenError } = reconcileChartLengths(labels.length, [data.length]);
+  if (lenError) {
+    console.error("render_chart: length reconciliation failed.", lenError, "raw args:", JSON.stringify(args));
+    return { toolResult: JSON.stringify({ error: lenError }), chartHtml: null };
+  }
+  const finalLabels = labels.slice(0, finalLen);
+  const finalData = data.slice(0, finalLen);
 
   // A confirmed real bug this fixes: the tool's JSON schema declares
   // `data` as an array of numbers, but that's not strictly enforced on
@@ -676,14 +779,7 @@ function handleRenderChartCall(argsJson) {
   // clear error telling GPT which value was bad, so it can retry with
   // corrected data instead of silently shipping a chart with invisible
   // bars.
-  const sanitizedData = finalData.map((v) => {
-    if (typeof v === "number") return v;
-    const cleaned = String(v).replace(/[$,\s]/g, "");
-    return Number(cleaned);
-  });
-  const badIndexes = sanitizedData
-    .map((v, i) => (Number.isFinite(v) ? null : i))
-    .filter((i) => i !== null);
+  const { sanitized: sanitizedData, badIndexes } = sanitizeChartValues(finalData);
   if (badIndexes.length > 0) {
     console.error(
       "render_chart: validation failed (non-numeric data values after sanitizing).",
@@ -2008,12 +2104,16 @@ app.post("/chat", rateLimitChat, async (req, res) => {
 // ------------------------------------------------------------------
 app.post("/transcribe", rateLimitChat, async (req, res) => {
   try {
-    const { audio } = req.body;
+    const { audio, language } = req.body;
     if (!audio || !audio.data) {
       return res.status(400).json({ error: "No audio provided." });
     }
-    const { text, language } = await transcribeAudio(audio);
-    res.json({ text, language });
+    // `language` is an optional ISO-639-1 hint (e.g. "en") the frontend
+    // sends when the person has an explicit Speaking Language set
+    // (rather than "auto") -- see transcribeAudio's own comment for why
+    // this fixes real language-misdetection cases on short clips.
+    const { text, language: detectedLanguage } = await transcribeAudio(audio, language || null);
+    res.json({ text, language: detectedLanguage });
   } catch (err) {
     console.error("Transcription error:", err.message);
     res.status(500).json({ error: "Could not transcribe that audio. Please try again." });
