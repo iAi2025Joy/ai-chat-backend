@@ -1281,8 +1281,9 @@ const SPOKEN_LANGUAGE_KEY_TO_NAME = {
 };
 
 // GARNET now has real, separate "models" the person picks from a menu
-// (Prediction Model, General Chat, and three not-yet-built ones:
-// Science, Cybersecurity & Privacy, Code). This guidance keeps General
+// (Prediction Model, General Chat, and six not-yet-built ones: Science,
+// Cybersecurity and Capacity Building, Code, Document Creator, Video
+// Creator, Images Creator, Audio Creator). This guidance keeps General
 // Chat from overstepping into territory the other models own, and
 // gives a real, helpful answer for the not-yet-built ones rather than
 // silently attempting a full answer as if they were in scope. Shared
@@ -1290,7 +1291,8 @@ const SPOKEN_LANGUAGE_KEY_TO_NAME = {
 // instructions (always included there, since Live Chat is one
 // continuous session without a mode-switching menu of its own).
 const GARNET_MODEL_SCOPE_GUIDANCE =
-  "OUT-OF-SCOPE TOPICS: if asked something squarely about cybersecurity, privacy, or capacity-building, or about science/scientific topics, or asking for programming/code help, give a genuinely helpful BRIEF general-knowledge answer (not a refusal, not silence) -- then mention that a dedicated model for that topic is coming soon and to check back for a more in-depth experience. Keep this mention brief, one short sentence, not a repeated disclaimer.";
+  "OUT-OF-SCOPE TOPICS: if asked something squarely about cybersecurity, privacy, or capacity-building, or about science/scientific topics, or asking for programming/code help, give a genuinely helpful BRIEF general-knowledge answer (not a refusal, not silence) -- then mention that a dedicated model for that topic is coming soon and to check back for a more in-depth experience. Keep this mention brief, one short sentence, not a repeated disclaimer. " +
+  "The same applies if asked to actually GENERATE a document, video, image, or audio file (not just discuss the topic) -- explain you can't produce that file directly yet, mention that a dedicated Document/Video/Images/Audio Creator model is coming soon, and in the meantime offer to help with the actual content in text form (e.g. write the document's text, describe/script the video, etc.) if that's useful.";
 
 // Only added when mode is "chat" (General Chat) -- Prediction Model
 // mode gives full predictions normally, as before.
