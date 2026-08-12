@@ -1281,7 +1281,7 @@ const SPOKEN_LANGUAGE_KEY_TO_NAME = {
 };
 
 // GARNET now has real, separate "models" the person picks from a menu
-// (Prediction Model, General Chat, and six not-yet-built ones: Science,
+// (Prediction Model, General Chat, and six not-yet-built ones: Science and Research,
 // Cybersecurity and Capacity Building, Code, Document Creator, Video
 // Creator, Images Creator, Audio Creator). This guidance keeps General
 // Chat from overstepping into territory the other models own, and
