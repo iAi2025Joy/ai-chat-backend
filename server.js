@@ -296,7 +296,18 @@ function detectForcedImageSearch(message) {
     /\b(photo|photos|picture|pictures|pics?|image|images)\s+of\b/.test(text) ||
     /\bshow\s+(me\s+)?(a\s+|some\s+)?(real\s+|actual\s+|genuine\s+)?(photo|photos|picture|pictures|pics?|image|images)\b/.test(text) ||
     /\bwhat\s+(does|do)\b.+\blook\s+like\b/.test(text) ||
-    /\bfind\s+(me\s+)?(a\s+|some\s+)?(photo|photos|picture|pictures|pics?|image|images)\b/.test(text)
+    /\bfind\s+(me\s+)?(a\s+|some\s+)?(photo|photos|picture|pictures|pics?|image|images)\b/.test(text) ||
+    // A confirmed real bug this fixes: "explain about plant cells with
+    // images" matched NONE of the patterns above (no "of", no "show
+    // me", no "find me"), so it fell through to soft prompt guidance
+    // instead of a guaranteed tool_choice -- and GPT wrote fake
+    // "[Source](url)" markdown links to Pexels PAGE urls (from an
+    // ordinary text search, not a real image search) instead of
+    // actually calling search_web_images and using a real ```images
+    // gallery block. "with image(s)/photo(s)/picture(s)" is an
+    // equally explicit, unambiguous request to see real images as any
+    // of the patterns above -- it deserves the same hard guarantee.
+    /\bwith\s+(some\s+|a\s+few\s+|a\s+couple\s+of\s+)?(photo|photos|picture|pictures|pics?|image|images)\b/.test(text)
   ) {
     return "search_web_images";
   }
