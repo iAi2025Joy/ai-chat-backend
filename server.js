@@ -1101,6 +1101,59 @@ app.post("/extract-document-text", rateLimitChat, async (req, res) => {
   }
 });
 
+// ------------------------------------------------------------------
+// ANALYZE IMAGE FOR LIVE CHAT (standalone) -- a confirmed real bug this
+// works around: sending an image directly into the Realtime API's live
+// session (as an input_image content part over the WebRTC data channel)
+// was tested directly and confirmed NOT to work with this app's model --
+// consistent with a documented, confirmed case of Azure's own hosted
+// version of this same API not supporting input_image in Realtime
+// sessions at all ("Azure Realtime models do NOT support input_image
+// yet. Only text and audio message parts are supported."). Rather than
+// keep relying on that uncertain capability, this routes around it
+// entirely: the SAME gpt-4o-mini vision pathway already proven working
+// for the normal /chat flow describes the image in real detail as
+// plain text, which the frontend then feeds into the live session as
+// an input_text item instead (already confirmed working) -- the model
+// still genuinely "sees" and reasons about the image's real content,
+// just via one extra text-conversion step rather than a Realtime
+// capability that doesn't actually work here.
+// ------------------------------------------------------------------
+app.post("/analyze-image-for-live-chat", rateLimitChat, async (req, res) => {
+  try {
+    const { image, caption } = req.body;
+    if (!image || typeof image !== "string") {
+      return res.status(400).json({ error: "No image provided." });
+    }
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                "Describe this image in real, specific detail -- what it actually shows, any text visible in it (transcribe it exactly), colors, layout, and anything else someone would need to know without seeing it themselves. This description will be read into a live spoken conversation, so write it as clear, natural prose (no markdown, no bullet lists)." +
+                (caption ? ` The person also said this about it: "${caption}"` : ""),
+            },
+            { type: "image_url", image_url: { url: image } },
+          ],
+        },
+      ],
+      max_tokens: 500,
+    });
+    const description = response.choices?.[0]?.message?.content?.trim() || "";
+    if (!description) {
+      return res.status(502).json({ error: "Could not analyze that image." });
+    }
+    res.json({ description });
+  } catch (err) {
+    console.error("Live Chat image analysis error:", err.message);
+    res.status(500).json({ error: "Could not analyze that image. Please try again." });
+  }
+});
+
 // ElevenLabs routes (/elevenlabs-voices, /elevenlabs-speak) removed --
 // the subscription was cancelled and nothing in the frontend calls
 // these anymore (Listen/Live Chat speech now use the browser's own
