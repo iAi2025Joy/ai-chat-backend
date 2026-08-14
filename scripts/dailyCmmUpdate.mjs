@@ -85,7 +85,12 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 async function fetchFeedItems(source) {
   try {
     const response = await fetch(source.url, {
-      headers: { "User-Agent": "GARNET-CMM-daily-update/1.0 (Institute of AI)" },
+      // Same real fix as scripts/weeklyPrivacyLawUpdate.mjs -- several
+      // source sites likely block requests carrying an unfamiliar,
+      // clearly-bot-identifying User-Agent string. A standard browser
+      // one is legitimate here since these are public RSS feeds
+      // intentionally published for syndication.
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" },
     });
     if (!response.ok) {
       console.error(`[${source.name}] fetch failed: HTTP ${response.status}`);

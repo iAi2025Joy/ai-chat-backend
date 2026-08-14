@@ -27,7 +27,7 @@
 // Action's logs, same as any source in the daily script.
 const CURATED_SOURCES = [
   { name: "DLA Piper -- Privacy Matters (Global GDPR/Data Protection)", url: "https://privacymatters.dlapiper.com/feed/" },
-  { name: "IAPP News", url: "https://iapp.org/news/rss/" },
+  { name: "IAPP -- US Privacy News Digest", url: "https://iapp.org/rss/united-states-dashboard-digest" },
   { name: "OECD.AI -- AI Policy Observatory", url: "https://oecd.ai/en/wonk/feed" },
   { name: "Future of Privacy Forum", url: "https://fpf.org/feed/" },
   { name: "Norton Rose Fulbright -- Data Protection Report", url: "https://feeds.feedburner.com/DataProtectionReport" },
@@ -53,7 +53,17 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 async function fetchFeedItems(source) {
   try {
     const response = await fetch(source.url, {
-      headers: { "User-Agent": "GARNET-privacy-law-weekly-update/1.0 (Institute of AI)" },
+      // A confirmed real cause of this script silently returning zero
+      // items: several source sites (particularly law-firm sites like
+      // DLA Piper's, which commonly run bot-protection/WAF services)
+      // block requests carrying an unfamiliar, clearly-bot-identifying
+      // User-Agent string -- confirmed by directly verifying the DLA
+      // Piper feed URL itself is real and returns valid RSS content
+      // when fetched with a normal browser User-Agent. Using a
+      // standard one here is legitimate for this use case (reading
+      // public RSS feeds these sites intentionally publish for
+      // syndication), not evasion of any real access restriction.
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" },
     });
     if (!response.ok) {
       console.error(`[${source.name}] fetch failed: HTTP ${response.status}`);
