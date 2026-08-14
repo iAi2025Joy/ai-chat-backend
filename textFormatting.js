@@ -81,6 +81,42 @@ export function formatMarkdownToHTML(text) {
     }
   );
 
+  // ✅ NEW: Extract ```cmm-report ... ``` fenced blocks the same way,
+  // same reasoning as ```chart above -- the content is a single JSON
+  // object (a structured CMM assessment report), not text meant to
+  // become paragraphs. Emitted only at the END of a completed guided
+  // Cybersecurity conversation (see buildCybersecurityModelInstructions
+  // in cybersecurityModel.js). Emits a placeholder <div
+  // class="cmm-report-download" data-cmm-report="...escaped JSON...">
+  // that the frontend turns into a real "Download Full Report (Word)"
+  // button -- same "backend emits a marker div, frontend does the
+  // actual rendering/generation" pattern already used for charts,
+  // images, and Mermaid diagrams.
+  const cmmReportBlocks = [];
+  textWithPlaceholders = textWithPlaceholders.replace(
+    /```cmm-report\s*\n([\s\S]*?)```/g,
+    (match, reportJsonRaw) => {
+      const placeholder = `@@CMM_REPORT_BLOCK_${cmmReportBlocks.length}@@`;
+      let safeJson = "{}";
+      try {
+        const parsedReport = JSON.parse(reportJsonRaw.trim());
+        safeJson = JSON.stringify(parsedReport)
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      } catch (err) {
+        console.error("Failed to parse ```cmm-report block JSON from model output:", err.message);
+        cmmReportBlocks.push(`<p><em>(Report download could not be prepared -- invalid report data.)</em></p>`);
+        return placeholder;
+      }
+      cmmReportBlocks.push(
+        `<div class="cmm-report-download" data-cmm-report="${safeJson}"><button class="cmm-report-download-btn" onclick="downloadCmmReportFromMessage(this)">📄 Download Full Report (Word)</button></div>`
+      );
+      return placeholder;
+    }
+  );
+
   // ✅ NEW: Extract ```images ... ``` fenced blocks the same way, same
   // reasoning as ```chart above. Emits a placeholder <div
   // class="web-images" data-images="...escaped JSON..."> that the
@@ -269,6 +305,7 @@ export function formatMarkdownToHTML(text) {
     const line = rawLine.trim();
     const mermaidPlaceholderMatch = line.match(/^@@MERMAID_BLOCK_(\d+)@@$/);
     const chartPlaceholderMatch = line.match(/^@@CHART_BLOCK_(\d+)@@$/);
+    const cmmReportPlaceholderMatch = line.match(/^@@CMM_REPORT_BLOCK_(\d+)@@$/);
     const imagesPlaceholderMatch = line.match(/^@@IMAGES_BLOCK_(\d+)@@$/);
     const tablePlaceholderMatch = line.match(/^@@TABLE_BLOCK_(\d+)@@$/);
     const codePlaceholderMatch = line.match(/^@@CODE_BLOCK_(\d+)@@$/);
@@ -283,6 +320,9 @@ export function formatMarkdownToHTML(text) {
     } else if (chartPlaceholderMatch) {
       flushList();
       htmlParts.push(chartBlocks[parseInt(chartPlaceholderMatch[1], 10)]);
+    } else if (cmmReportPlaceholderMatch) {
+      flushList();
+      htmlParts.push(cmmReportBlocks[parseInt(cmmReportPlaceholderMatch[1], 10)]);
     } else if (imagesPlaceholderMatch) {
       flushList();
       htmlParts.push(imageBlocks[parseInt(imagesPlaceholderMatch[1], 10)]);

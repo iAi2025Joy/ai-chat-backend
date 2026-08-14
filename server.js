@@ -66,6 +66,8 @@ import {
   buildCybersecurityModelInstructions,
   CMM_ASSESSMENT_FACTORS,
   buildCmmAssessmentReport,
+  renderCmmReportMarkdown,
+  buildCmmReportDocx,
 } from "./cybersecurityModel.js";
 
 const app = express();
@@ -1211,18 +1213,53 @@ app.post("/cmm-assessment-report", rateLimitChat, async (req, res) => {
     if (!Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({ error: "No assessment answers provided." });
     }
-    const report = await buildCmmAssessmentReport(openai, answers);
-    if (!report) {
+    const structuredReport = await buildCmmAssessmentReport(openai, answers);
+    if (!structuredReport) {
       return res.status(502).json({ error: "Could not generate the assessment report." });
     }
-    // Formatted through the SAME pipeline every normal /chat reply
-    // goes through, so this renders identically to any other bot
-    // message (paragraphs, any lists the model used, etc.) instead of
-    // showing as unformatted raw text.
-    res.json({ reportHtml: formatMarkdownToHTML(report) });
+    // Same formatting pipeline every normal /chat reply goes through,
+    // so the chat-visible summary looks like any other bot message.
+    // structuredReport is ALSO returned raw -- the frontend needs it to
+    // render the real chart (Chart.js, client-side) and to request the
+    // actual downloadable Word document from /generate-cmm-report-docx.
+    res.json({
+      reportHtml: formatMarkdownToHTML(renderCmmReportMarkdown(structuredReport)),
+      structuredReport,
+    });
   } catch (err) {
     console.error("CMM assessment report error:", err.message);
     res.status(500).json({ error: "Could not generate the assessment report. Please try again." });
+  }
+});
+
+// Generates the actual downloadable .docx file -- called both after
+// the Structured Form completes and when someone clicks the "Download
+// Full Report (Word)" button that appears at the end of a completed
+// Guided Conversation (see the ```cmm-report fenced block handling in
+// textFormatting.js). chartImageBase64 is a real PNG data URL rendered
+// CLIENT-SIDE by the browser's own Chart.js (see generateCmmReportDocx
+// in app.js) -- deliberately not rendered on this server, to avoid
+// depending on native canvas libraries that are a common source of
+// unreliable deploys on hosting platforms like Render.
+app.post("/generate-cmm-report-docx", rateLimitChat, async (req, res) => {
+  try {
+    const { structuredReport, chartImageBase64 } = req.body;
+    if (!structuredReport || typeof structuredReport !== "object") {
+      return res.status(400).json({ error: "No report data provided." });
+    }
+    const docxBuffer = await buildCmmReportDocx(structuredReport, chartImageBase64);
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="CMM-Cybersecurity-Assessment-${new Date().toISOString().slice(0, 10)}.docx"`
+    );
+    res.send(docxBuffer);
+  } catch (err) {
+    console.error("CMM report docx generation error:", err.message);
+    res.status(500).json({ error: "Could not generate the downloadable report. Please try again." });
   }
 });
 

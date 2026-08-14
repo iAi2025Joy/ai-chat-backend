@@ -152,9 +152,14 @@ export function getFactorKnowledgeChunk(knowledgeChunkId) {
 // in its real CMM stage criteria (via getFactorKnowledgeChunk, not the
 // whole knowledge base), and asks the model to produce a genuine
 // per-Factor maturity estimate with rationale and concrete capacity-
-// building recommendations. Uses gpt-4o-mini (same cost-conscious
-// model already used elsewhere in this backend for similar generation
-// tasks, e.g. live-chat image analysis).
+// building recommendations. Returns REAL STRUCTURED DATA (not prose)
+// -- per explicit request to generate a downloadable Word document
+// with real charts, the report needs a genuine numeric stageNumber
+// per Factor (to compute a real per-Dimension average for the chart)
+// and a real hierarchical structure (to build actual Word headings/
+// tables), not just a block of text. Uses gpt-4o-mini (same
+// cost-conscious model already used elsewhere in this backend for
+// similar generation tasks, e.g. live-chat image analysis).
 export async function buildCmmAssessmentReport(openaiClient, answers) {
   const sections = answers
     .map((a) => {
@@ -176,17 +181,181 @@ export async function buildCmmAssessmentReport(openaiClient, answers) {
       {
         role: "system",
         content:
-          "You are generating a real Cybersecurity Capacity Maturity Model (CMM) self-assessment report, grounded in the Global Cyber Security Capacity Centre's actual CMM framework. For each Factor below, you're given its REAL stage criteria (start-up/formative/established/strategic/dynamic) and the person's own real answer describing their situation. For each Factor, write: (1) your best-estimate maturity Stage based on their answer, (2) a brief rationale explaining why, referencing the actual criteria, (3) 1-2 concrete, specific capacity-building recommendations for the next stage up. If an answer was left blank or too vague to assess, say so honestly rather than guessing a stage. Organize the report by the 5 Dimensions, with a short executive summary at the top (overall strengths, overall gaps, top 3 priority recommendations across all Dimensions). Write in clear plain prose with minimal markdown -- this will be shown as a real chat message, not a formatted document. Be honest that this is a self-assessment from conversational answers, not a formal multi-stakeholder CMM review, and that a full review would involve broader stakeholder consultation.",
+          "You are generating a real Cybersecurity Capacity Maturity Model (CMM) self-assessment report, grounded in the Global Cyber Security Capacity Centre's actual CMM framework. For each Factor below, you're given its REAL stage criteria (start-up/formative/established/strategic/dynamic) and the person's own real answer describing their situation. " +
+          "Respond with ONLY a JSON object, no other text, matching this EXACT shape: " +
+          `{"executiveSummary": "2-4 sentences on overall strengths and gaps", "topPriorityRecommendations": ["...", "...", "..."], "dimensions": [{"name": "Dimension 1: Cybersecurity Policy and Strategy", "factors": [{"id": "D1.1", "name": "National Cybersecurity Strategy", "stage": "Formative", "stageNumber": 2, "rationale": "...", "recommendation": "..."}]}]}. ` +
+          "stageNumber must be an integer 1-5 matching stage exactly: 1=Start-up, 2=Formative, 3=Established, 4=Strategic, 5=Dynamic. If an answer was left blank or too vague to assess, still include the Factor with stage 'Unable to assess', stageNumber 0, and say so honestly in the rationale rather than guessing. Group factors under their real Dimension name, in the same 5-Dimension order as given. topPriorityRecommendations should have exactly 3 items, the most impactful across all Dimensions. Be honest in rationale text that this is a self-assessment from answers, not a formal multi-stakeholder CMM review.",
       },
       { role: "user", content: sections },
     ],
-    max_tokens: 3000,
+    response_format: { type: "json_object" },
+    max_tokens: 4000,
   });
 
-  return response.choices?.[0]?.message?.content?.trim() || "";
+  const raw = response.choices?.[0]?.message?.content || "{}";
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("CMM report JSON parse failed:", err.message, "raw:", raw.slice(0, 500));
+    return null;
+  }
+}
+
+// Human-readable name for each Stage, given a stageNumber (0 for
+// unassessed, 1-5 for the real CMM stages) -- shared by the chat
+// summary renderer and the Word document builder so they can't drift
+// out of sync with each other.
+const STAGE_NAMES = ["Unable to assess", "Start-up", "Formative", "Established", "Strategic", "Dynamic"];
+
+// Renders the structured report as real markdown for display in the
+// chat -- run through the SAME formatMarkdownToHTML() every other bot
+// message uses (see server.js), so this looks and behaves exactly like
+// any other reply, not a special case.
+export function renderCmmReportMarkdown(report) {
+  if (!report) return "Could not generate the assessment report.";
+  let md = `## Cybersecurity Capacity Assessment -- Prepared by Institute of AI Cybersecurity Services\n\n`;
+  md += `${report.executiveSummary || ""}\n\n`;
+  if (Array.isArray(report.topPriorityRecommendations) && report.topPriorityRecommendations.length > 0) {
+    md += `**Top priority recommendations:**\n`;
+    report.topPriorityRecommendations.forEach((rec) => {
+      md += `- ${rec}\n`;
+    });
+    md += `\n`;
+  }
+  (report.dimensions || []).forEach((dim) => {
+    md += `### ${dim.name}\n\n`;
+    (dim.factors || []).forEach((f) => {
+      md += `**${f.id} ${f.name} -- ${f.stage}**\n${f.rationale}\n*Recommendation:* ${f.recommendation}\n\n`;
+    });
+  });
+  md += `\n_This is a self-assessment based on the answers provided, not a formal multi-stakeholder CMM review. A full GCSCC review would involve broader in-country stakeholder consultation._`;
+  return md;
+}
+
+// Builds the actual downloadable .docx file -- real headings, a real
+// table per Dimension (Factor / Stage / Rationale / Recommendation),
+// and the real chart image (rendered client-side via the app's own
+// already-working Chart.js setup and passed in here as a base64 PNG --
+// deliberately NOT rendered server-side, since native canvas/chart
+// libraries are a common source of unreliable deploys on hosting
+// platforms like Render that don't include their system-level
+// dependencies by default; doing the actual pixel rendering in the
+// browser, where Chart.js is already proven working, avoids that risk
+// entirely). Uses the docx library -- pure JS, no native dependencies.
+export async function buildCmmReportDocx(report, chartImageBase64) {
+  const {
+    Document,
+    Packer,
+    Paragraph,
+    HeadingLevel,
+    Table,
+    TableRow,
+    TableCell,
+    TextRun,
+    ImageRun,
+    WidthType,
+    AlignmentType,
+  } = await import("docx");
+
+  const children = [
+    new Paragraph({
+      text: "Cybersecurity Capacity Assessment Report",
+      heading: HeadingLevel.TITLE,
+      alignment: AlignmentType.CENTER,
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [new TextRun({ text: "Prepared by Institute of AI Cybersecurity Services", italics: true, size: 24 })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [new TextRun({ text: `Generated ${new Date().toISOString().slice(0, 10)}`, size: 20, color: "888888" })],
+    }),
+    new Paragraph({ text: "", spacing: { after: 200 } }),
+    new Paragraph({ text: "Executive Summary", heading: HeadingLevel.HEADING_1 }),
+    new Paragraph({ text: report.executiveSummary || "" }),
+  ];
+
+  if (Array.isArray(report.topPriorityRecommendations) && report.topPriorityRecommendations.length > 0) {
+    children.push(new Paragraph({ text: "Top Priority Recommendations", heading: HeadingLevel.HEADING_1 }));
+    report.topPriorityRecommendations.forEach((rec) => {
+      children.push(new Paragraph({ text: rec, bullet: { level: 0 } }));
+    });
+  }
+
+  // The real chart image -- a genuine drawing/chart per explicit
+  // request, not decorative filler: a bar chart of each Dimension's
+  // average real maturity-stage number (1-5), computed from the same
+  // structured data used everywhere else in this report, so the chart
+  // and the written content can never disagree with each other.
+  if (chartImageBase64) {
+    try {
+      const base64Data = chartImageBase64.replace(/^data:image\/\w+;base64,/, "");
+      const imageBuffer = Buffer.from(base64Data, "base64");
+      children.push(new Paragraph({ text: "Maturity Overview by Dimension", heading: HeadingLevel.HEADING_1 }));
+      children.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new ImageRun({ data: imageBuffer, transformation: { width: 500, height: 300 } })],
+        })
+      );
+    } catch (err) {
+      console.error("Could not embed chart image in report:", err.message);
+      // Falls through without the chart image rather than failing the
+      // whole document -- the written content is still a complete,
+      // real report even without it.
+    }
+  }
+
+  (report.dimensions || []).forEach((dim) => {
+    children.push(new Paragraph({ text: dim.name, heading: HeadingLevel.HEADING_1 }));
+
+    const headerRow = new TableRow({
+      children: ["Factor", "Stage", "Rationale", "Recommendation"].map(
+        (label) =>
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: label, bold: true })] })],
+          })
+      ),
+    });
+
+    const dataRows = (dim.factors || []).map((f) => {
+      const stageLabel = STAGE_NAMES[f.stageNumber] || f.stage || "-";
+      return new TableRow({
+        children: [
+          new Paragraph({ children: [new TextRun({ text: `${f.id} ${f.name}`, bold: true })] }),
+          new Paragraph({ text: stageLabel }),
+          new Paragraph({ text: f.rationale || "" }),
+          new Paragraph({ text: f.recommendation || "" }),
+        ].map((p) => new TableCell({ children: [p] })),
+      });
+    });
+
+    children.push(
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [headerRow, ...dataRows],
+      })
+    );
+    children.push(new Paragraph({ text: "", spacing: { after: 200 } }));
+  });
+
+  children.push(
+    new Paragraph({
+      text: "This is a self-assessment based on the answers provided, not a formal multi-stakeholder CMM review conducted by the GCSCC. A full review involves broader in-country stakeholder consultation and desk research.",
+      italics: true,
+    })
+  );
+
+  const doc = new Document({
+    sections: [{ children }],
+  });
+
+  return Packer.toBuffer(doc);
 }
 
 
+// The Cybersecurity and Capacity Building model's own system prompt --
 // separate from GARNET's general chat prompt, grounded specifically in
 // the real GCSCC Cybersecurity Capacity Maturity Model (CMM) and real,
 // current GCSCC context (the Global Constellation, and GCSCC's own 2025
@@ -202,7 +371,9 @@ export function buildCybersecurityModelInstructions(retrievedKnowledgeText) {
       ? `REAL CMM/GCSCC CONTEXT RETRIEVED FOR THIS QUESTION (use this as your actual grounding -- these are real facts from the CMM 2021 Edition and current GCSCC information, including the real stage-by-stage indicator criteria, not something to second-guess or hedge about):\n\n${retrievedKnowledgeText}\n\n`
       : "") +
     "Answer using the real context above when it's relevant to what's being asked. If a question goes genuinely beyond what's retrieved here, say so honestly and offer to help with what you do have, or suggest they consult the full CMM document directly at https://gcscc.ox.ac.uk/the-cmm. Never fabricate specific CMM indicator details you don't actually have. " +
-    "GUIDED ASSESSMENT PROJECTS: the user can start a guided capacity-assessment project (via the 'Start Assessment Project' option in this mode), choosing either a structured form (handled separately by a dedicated report-generation flow -- if this happens, you'll see the results as a system message with the person's real answers already collected) or a GUIDED CONVERSATION, which you run directly: if the user's message indicates they want to start a guided conversational assessment, walk through the CMM's 5 Dimensions ONE AT A TIME, and within each Dimension its real Factors one at a time -- ask a genuine, specific self-assessment question about their organisation's/nation's current situation for that Factor (grounded in the real stage criteria above), let them answer in their own words, then move to the next Factor. Keep track of where you are in the conversation (which Dimension/Factor you've covered) using the conversation history itself -- don't restart from Dimension 1 if you're clearly partway through. Once all 5 Dimensions have been covered, synthesize a real structured report: for each Factor, your best-estimate maturity Stage based on what they described (being honest that this is an estimate from a conversation, not a formal multi-stakeholder CMM review), a brief rationale referencing the real CMM criteria, and 1-2 concrete, specific capacity-building recommendations. Never rush through multiple Dimensions in one message -- this should feel like a genuine guided process, not a wall of questions dumped at once. " +
+    "All assessments and reports you produce in this mode are prepared under Institute of AI Cybersecurity Services -- mention this naturally when introducing a report or the assessment process (e.g. 'This assessment is prepared by Institute of AI Cybersecurity Services'), not on every single message. " +
+    "GUIDED ASSESSMENT PROJECTS: the user can start a guided capacity-assessment project (via the 'Start Assessment Project' option in this mode), choosing either a structured form (handled separately by a dedicated report-generation flow -- if this happens, you'll see the results as a system message with the person's real answers already collected) or a GUIDED CONVERSATION, which you run directly: if the user's message indicates they want to start a guided conversational assessment, walk through the CMM's 5 Dimensions ONE AT A TIME, and within each Dimension its real Factors one at a time -- ask a genuine, specific self-assessment question about their organisation's/nation's current situation for that Factor (grounded in the real stage criteria above), let them answer in their own words, then move to the next Factor. Keep track of where you are in the conversation (which Dimension/Factor you've covered) using the conversation history itself -- don't restart from Dimension 1 if you're clearly partway through. Never rush through multiple Dimensions in one message -- this should feel like a genuine guided process, not a wall of questions dumped at once. " +
+    "FINISHING A GUIDED CONVERSATION -- READ THIS CAREFULLY: once all 5 Dimensions have genuinely been covered, write your normal prose summary of the findings (strengths, gaps, top recommendations) AND, immediately after it, include a fenced code block starting with ```cmm-report and ending with ``` containing ONLY a single valid JSON object with this EXACT shape (no other text inside the fence): {\"executiveSummary\": \"2-4 sentences\", \"topPriorityRecommendations\": [\"...\", \"...\", \"...\"], \"dimensions\": [{\"name\": \"Dimension 1: Cybersecurity Policy and Strategy\", \"factors\": [{\"id\": \"D1.1\", \"name\": \"National Cybersecurity Strategy\", \"stage\": \"Formative\", \"stageNumber\": 2, \"rationale\": \"...\", \"recommendation\": \"...\"}]}]}. stageNumber must be an integer 1-5 (1=Start-up, 2=Formative, 3=Established, 4=Strategic, 5=Dynamic; use 0 with stage \\\"Unable to assess\\\" for any Factor you genuinely couldn't assess from the conversation). Cover every Factor actually discussed, grouped under its real Dimension. This fenced block automatically becomes a real \\\"Download Full Report (Word)\\\" button for the user -- it does NOT display as raw text, so don't describe or reference the JSON itself in your prose, just include the block. Only include this block once the assessment is genuinely complete, never partway through. " +
     "You still have access to real-time web search -- use it for anything current-events-related (recent breaches, new national strategies, recent GCSCC news) that wouldn't be in a static knowledge base. " +
     "Keep the same clear, direct GARNET voice as the rest of the app -- no unnecessary hedging, no markdown headers in casual replies, genuinely useful and specific rather than generic cybersecurity platitudes."
   );
