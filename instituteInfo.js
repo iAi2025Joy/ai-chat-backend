@@ -56,18 +56,30 @@ export const SPOKEN_LANGUAGE_KEY_TO_NAME = {
 };
 
 // GARNET now has real, separate "models" the person picks from a menu
-// (Prediction Model, General Chat, and six not-yet-built ones: Science and Research,
-// Cybersecurity and Capacity Building, Code, Document Creator, Video
-// Creator, Images Creator, Audio Creator). This guidance keeps General
-// Chat from overstepping into territory the other models own, and
-// gives a real, helpful answer for the not-yet-built ones rather than
-// silently attempting a full answer as if they were in scope. Shared
-// between /chat (mode-aware, see below) and Live Chat's Realtime
-// instructions (always included there, since Live Chat is one
-// continuous session without a mode-switching menu of its own).
+// (Prediction Model, Cybersecurity and Capacity Building, General Chat,
+// and five not-yet-built ones: Science and Research, Code, Document
+// Creator, Video Creator, Images Creator, Audio Creator). This guidance
+// keeps General Chat from overstepping into territory the other real
+// models own, and gives a real, helpful answer for the not-yet-built
+// ones rather than silently attempting a full answer as if they were
+// in scope. Shared between /chat (mode-aware, see below) and Live
+// Chat's Realtime instructions (always included there, since Live Chat
+// is one continuous session without a mode-switching menu of its own).
 export const GARNET_MODEL_SCOPE_GUIDANCE =
-  "OUT-OF-SCOPE TOPICS: if asked something squarely about cybersecurity, privacy, or capacity-building, or about science/scientific topics, or asking for programming/code help, give a genuinely helpful BRIEF general-knowledge answer (not a refusal, not silence) -- then mention that a dedicated model for that topic is coming soon and to check back for a more in-depth experience. Keep this mention brief, one short sentence, not a repeated disclaimer. " +
+  "OUT-OF-SCOPE TOPICS: if asked something squarely about science/scientific topics, or asking for programming/code help, give a genuinely helpful BRIEF general-knowledge answer (not a refusal, not silence) -- then mention that a dedicated model for that topic is coming soon and to check back for a more in-depth experience. Keep this mention brief, one short sentence, not a repeated disclaimer. " +
   "The same applies if asked to actually GENERATE a document, video, image, or audio file (not just discuss the topic) -- explain you can't produce that file directly yet, mention that a dedicated Document/Video/Images/Audio Creator model is coming soon, and in the meantime offer to help with the actual content in text form (e.g. write the document's text, describe/script the video, etc.) if that's useful.";
+
+// Only appended in General Chat mode (mode === "chat"), same pattern as
+// GARNET_GENERAL_CHAT_PREDICTION_GUIDANCE below -- Cybersecurity and
+// Capacity Building is now a REAL model (grounded in the actual GCSCC
+// Cybersecurity Capacity Maturity Model via retrieval -- see
+// cybersecurityModel.js), so General Chat should still answer
+// cybersecurity questions helpfully, but point toward the dedicated
+// model for genuinely deep/specific CMM-grounded work rather than
+// silently trying to be the CMM expert itself with no real knowledge
+// base behind it.
+export const GARNET_GENERAL_CHAT_CYBERSECURITY_GUIDANCE =
+  "You're currently in GENERAL CHAT, not the Cybersecurity and Capacity Building model. You can still answer cybersecurity questions helpfully here from general knowledge -- but for anything genuinely grounded in the GCSCC's real Cybersecurity Capacity Maturity Model (CMM), national capacity assessment, or in-depth capacity-building work, mention that switching to the Cybersecurity and Capacity Building model (from the MODELS menu) gives a more specialized, CMM-grounded experience. Keep this mention brief, one short sentence, not a repeated disclaimer.";
 
 // Only added when mode is "chat" (General Chat) -- Prediction Model
 // mode gives full predictions normally, as before.

@@ -52,6 +52,7 @@ import {
   SPOKEN_LANGUAGE_KEY_TO_NAME,
   GARNET_MODEL_SCOPE_GUIDANCE,
   GARNET_GENERAL_CHAT_PREDICTION_GUIDANCE,
+  GARNET_GENERAL_CHAT_CYBERSECURITY_GUIDANCE,
 } from "./instituteInfo.js";
 import {
   detectForcedPredictionTool,
@@ -59,6 +60,13 @@ import {
   detectForcedChartRequest,
   detectForcedWebSearch,
 } from "./toolDetectors.js";
+import {
+  retrieveCybersecurityKnowledge,
+  formatRetrievedKnowledge,
+  buildCybersecurityModelInstructions,
+  CMM_ASSESSMENT_FACTORS,
+  buildCmmAssessmentReport,
+} from "./cybersecurityModel.js";
 
 const app = express();
 
@@ -420,6 +428,25 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         }
       }
 
+      // Only runs the real embedding + retrieval when actually in
+      // Cybersecurity mode -- costs nothing extra for every other
+      // request. Computed here, before the messages array, since it's
+      // async (a real OpenAI embeddings call) and needs to be awaited
+      // before being folded into a system message below.
+      let cybersecurityRetrievedText = "";
+      if (mode === "cybersecurity") {
+        try {
+          const retrieved = await retrieveCybersecurityKnowledge(message);
+          cybersecurityRetrievedText = formatRetrievedKnowledge(retrieved);
+        } catch (err) {
+          console.error("Cybersecurity knowledge retrieval failed:", err.message);
+          // Falls through with cybersecurityRetrievedText left empty --
+          // buildCybersecurityModelInstructions still works fine
+          // without retrieved context, just less specifically grounded
+          // for this one turn, rather than failing the whole request.
+        }
+      }
+
       const messages = [
         {
           role: "system",
@@ -514,8 +541,15 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         },
         {
           role: "system",
-          content: GARNET_MODEL_SCOPE_GUIDANCE + (mode === "chat" ? " " + GARNET_GENERAL_CHAT_PREDICTION_GUIDANCE : ""),
+          content: GARNET_MODEL_SCOPE_GUIDANCE + (mode === "chat" ? " " + GARNET_GENERAL_CHAT_PREDICTION_GUIDANCE + " " + GARNET_GENERAL_CHAT_CYBERSECURITY_GUIDANCE : ""),
         },
+        // Only added when actually in Cybersecurity mode -- the real,
+        // grounded model instructions built from whatever knowledge
+        // was retrieved above for this specific question (see
+        // cybersecurityModel.js).
+        ...(mode === "cybersecurity"
+          ? [{ role: "system", content: buildCybersecurityModelInstructions(cybersecurityRetrievedText) }]
+          : []),
         {
           role: "user",
           content:
@@ -1151,6 +1185,44 @@ app.post("/analyze-image-for-live-chat", rateLimitChat, async (req, res) => {
   } catch (err) {
     console.error("Live Chat image analysis error:", err.message);
     res.status(500).json({ error: "Could not analyze that image. Please try again." });
+  }
+});
+
+// ------------------------------------------------------------------
+// CMM ASSESSMENT -- Structured Form flow, per explicit request to let
+// the Cybersecurity and Capacity Building model run a real guided
+// project (not just answer questions). Two real routes exist: a
+// GUIDED CONVERSATION (handled entirely within normal /chat, see
+// buildCybersecurityModelInstructions in cybersecurityModel.js) and
+// this STRUCTURED FORM route -- the frontend collects real answers for
+// all 23 Factors via an actual multi-step form UI, POSTs them here, and
+// gets back a real, CMM-grounded maturity report.
+// ------------------------------------------------------------------
+app.get("/cmm-assessment-factors", (req, res) => {
+  // Lets the frontend build the actual form fields from the real
+  // Factor list/questions, rather than duplicating that data in two
+  // places that could drift out of sync.
+  res.json({ factors: CMM_ASSESSMENT_FACTORS });
+});
+
+app.post("/cmm-assessment-report", rateLimitChat, async (req, res) => {
+  try {
+    const { answers } = req.body;
+    if (!Array.isArray(answers) || answers.length === 0) {
+      return res.status(400).json({ error: "No assessment answers provided." });
+    }
+    const report = await buildCmmAssessmentReport(openai, answers);
+    if (!report) {
+      return res.status(502).json({ error: "Could not generate the assessment report." });
+    }
+    // Formatted through the SAME pipeline every normal /chat reply
+    // goes through, so this renders identically to any other bot
+    // message (paragraphs, any lists the model used, etc.) instead of
+    // showing as unformatted raw text.
+    res.json({ reportHtml: formatMarkdownToHTML(report) });
+  } catch (err) {
+    console.error("CMM assessment report error:", err.message);
+    res.status(500).json({ error: "Could not generate the assessment report. Please try again." });
   }
 });
 
