@@ -22,7 +22,7 @@
 // counts as Established for X" questions turn out to be common --
 // just add more chunks here, nothing else needs to change.
 
-export const CYBERSECURITY_KNOWLEDGE_CHUNKS = [
+export const CYBERSECURITY_CORE_KNOWLEDGE_CHUNKS = [
   // ------------------------------------------------------------------
   // FULL STAGE-BY-STAGE INDICATOR CONTENT -- the actual scoring
   // criteria for each of the 23 Factors, condensed from the CMM 2021
@@ -201,4 +201,29 @@ export const CYBERSECURITY_KNOWLEDGE_CHUNKS = [
     text:
       "The Global Cyber Security Capacity Centre (GCSCC) is a programme of the Oxford Martin School, based at the Department of Computer Science, University of Oxford. It is a leading international centre for research on efficient and effective cybersecurity capacity-building, aiming to increase the scale, pace, quality, and impact of capacity-building initiatives worldwide through a comprehensive and nuanced understanding of the cybersecurity capacity landscape. The GCSCC's goal is for its knowledge and research to help nations improve their cybersecurity capacities in a systematic, substantive way, promoting an innovative cyberspace in support of well-being, human rights, and prosperity for all.",
   },
+];
+
+// ------------------------------------------------------------------
+// DAILY AUTO-UPDATE SECTION -- per explicit request, this array is
+// entirely managed by scripts/dailyCmmUpdate.mjs, run daily via
+// GitHub Actions (see .github/workflows/cmm-daily-update.yml). It
+// checks a curated list of real, authoritative cybersecurity/capacity-
+// building sources for genuinely new developments, and commits updates
+// here automatically -- no manual review step, per explicit request.
+// Kept in its own clearly-separated array (not mixed into the
+// hand-curated core content above) so the two stay organized even
+// though updates apply automatically -- if a bad/hallucinated entry
+// ever shows up, it's easy to identify and remove since every entry
+// here is clearly dated and sourced, and this whole array can be
+// cleared independently without touching the core CMM content above.
+// The script also prunes old entries (see MAX_DAILY_UPDATE_CHUNKS
+// below) so this doesn't grow unbounded over time.
+// ------------------------------------------------------------------
+export const CYBERSECURITY_DAILY_UPDATE_CHUNKS = [];
+
+// Combined knowledge base actually used for retrieval (see
+// cybersecurityModel.js) -- core content first, then daily updates.
+export const CYBERSECURITY_KNOWLEDGE_CHUNKS = [
+  ...CYBERSECURITY_CORE_KNOWLEDGE_CHUNKS,
+  ...CYBERSECURITY_DAILY_UPDATE_CHUNKS,
 ];
