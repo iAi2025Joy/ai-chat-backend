@@ -32,7 +32,14 @@ const CURATED_SOURCES = [
   // end (not a fixable URL/config issue). Real, working feed content
   // was found from it once before the blocking kicked in, but this
   // isn't reliable enough to keep relying on.
-  { name: "IAPP -- US Privacy News Digest", url: "https://iapp.org/rss/united-states-dashboard-digest" },
+  // A confirmed real cause of "found 0 items" despite no fetch error:
+  // iapp.org's main site is a JavaScript-rendered app that returns an
+  // essentially empty HTML shell to non-browser requests (confirmed
+  // directly -- another IAPP dashboard page returns literally "You
+  // need to enable JavaScript to run this app" when fetched this way).
+  // Their real RSS syndication lives on a SEPARATE subdomain,
+  // westin.iapp.org, not iapp.org itself.
+  { name: "IAPP -- US Privacy News Digest", url: "https://westin.iapp.org/rss/united-states-dashboard-digest/" },
   // OECD.AI's Wonk blog does not appear to have a real native RSS feed
   // at all (no confirmed one could be found after real research) --
   // replaced with a confirmed, verified-working AI news feed instead,
