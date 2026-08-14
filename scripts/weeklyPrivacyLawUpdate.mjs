@@ -60,7 +60,7 @@ const KNOWLEDGE_BASE_PATH = path.join(__dirname, "..", "cybersecurityKnowledgeBa
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-async function fetchFeedItems(source) {
+async function fetchFeedItems(source, attempt = 1) {
   try {
     const response = await fetch(source.url, {
       // A confirmed real cause of this script silently returning zero
@@ -74,6 +74,11 @@ async function fetchFeedItems(source) {
       // public RSS feeds these sites intentionally publish for
       // syndication), not evasion of any real access restriction.
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" },
+      // Node's fetch has no default timeout -- a genuinely stuck
+      // connection (as opposed to a clean rejection) could otherwise
+      // hang for a very long time rather than failing quickly and
+      // clearly. 15s is generous for a small RSS feed.
+      signal: AbortSignal.timeout(15000),
     });
     if (!response.ok) {
       console.error(`[${source.name}] fetch failed: HTTP ${response.status}`);
@@ -93,7 +98,26 @@ async function fetchFeedItems(source) {
       return { title, link, source: source.name };
     }).filter((item) => item.title);
   } catch (err) {
-    console.error(`[${source.name}] error:`, err.message);
+    // A confirmed real gap this fixes: a generic "fetch failed" error
+    // from Node's fetch() is just a wrapper -- the REAL underlying
+    // cause (DNS failure, connection reset, TLS handshake issue,
+    // timeout, etc.) is normally attached as err.cause, which wasn't
+    // being logged at all before, making it impossible to actually
+    // diagnose network-level failures (as opposed to clean HTTP error
+    // responses, which were already logged with their real status
+    // code above).
+    const causeDetail = err.cause ? ` -- cause: ${err.cause.code || err.cause.message || err.cause}` : "";
+    console.error(`[${source.name}] error (attempt ${attempt}): ${err.message}${causeDetail}`);
+    // One retry for transient network issues (a brief connection blip,
+    // a momentary timeout) before actually giving up on this source
+    // for this run -- doesn't help with genuine, deliberate blocking
+    // (like DLA Piper's confirmed persistent 403), but does help with
+    // real one-off network flakiness, which is common and shouldn't
+    // cost an entire source for the week over a single bad connection.
+    if (attempt === 1) {
+      console.error(`[${source.name}] retrying once...`);
+      return fetchFeedItems(source, 2);
+    }
     return [];
   }
 }

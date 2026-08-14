@@ -82,7 +82,7 @@ const KNOWLEDGE_BASE_PATH = path.join(__dirname, "..", "cybersecurityKnowledgeBa
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-async function fetchFeedItems(source) {
+async function fetchFeedItems(source, attempt = 1) {
   try {
     const response = await fetch(source.url, {
       // Same real fix as scripts/weeklyPrivacyLawUpdate.mjs -- several
@@ -91,6 +91,10 @@ async function fetchFeedItems(source) {
       // one is legitimate here since these are public RSS feeds
       // intentionally published for syndication.
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" },
+      // Node's fetch has no default timeout -- without this, a
+      // genuinely stuck connection could hang rather than fail
+      // cleanly and quickly.
+      signal: AbortSignal.timeout(15000),
     });
     if (!response.ok) {
       console.error(`[${source.name}] fetch failed: HTTP ${response.status}`);
@@ -112,7 +116,19 @@ async function fetchFeedItems(source) {
       return { title, link, source: source.name };
     }).filter((item) => item.title);
   } catch (err) {
-    console.error(`[${source.name}] error:`, err.message);
+    // Real underlying cause (DNS failure, connection reset, TLS
+    // handshake issue, timeout, etc.) is normally attached as
+    // err.cause -- not logging it before made a generic "fetch failed"
+    // impossible to actually diagnose, unlike clean HTTP error
+    // responses (already logged with their real status code above).
+    const causeDetail = err.cause ? ` -- cause: ${err.cause.code || err.cause.message || err.cause}` : "";
+    console.error(`[${source.name}] error (attempt ${attempt}): ${err.message}${causeDetail}`);
+    // One retry for transient network issues before giving up on this
+    // source for this run.
+    if (attempt === 1) {
+      console.error(`[${source.name}] retrying once...`);
+      return fetchFeedItems(source, 2);
+    }
     return [];
   }
 }
