@@ -26,9 +26,19 @@
 // resolve, that's a normal, expected thing to verify/adjust in the
 // Action's logs, same as any source in the daily script.
 const CURATED_SOURCES = [
-  { name: "DLA Piper -- Privacy Matters (Global GDPR/Data Protection)", url: "https://privacymatters.dlapiper.com/feed/" },
+  // DLA Piper's Privacy Matters removed -- confirmed via multiple real
+  // runs to return a consistent HTTP 403 even with a proper browser
+  // User-Agent, indicating genuine, deliberate bot-blocking on their
+  // end (not a fixable URL/config issue). Real, working feed content
+  // was found from it once before the blocking kicked in, but this
+  // isn't reliable enough to keep relying on.
   { name: "IAPP -- US Privacy News Digest", url: "https://iapp.org/rss/united-states-dashboard-digest" },
-  { name: "OECD.AI -- AI Policy Observatory", url: "https://oecd.ai/en/wonk/feed" },
+  // OECD.AI's Wonk blog does not appear to have a real native RSS feed
+  // at all (no confirmed one could be found after real research) --
+  // replaced with a confirmed, verified-working AI news feed instead,
+  // which regularly covers AI governance/regulation developments
+  // (EU AI Act, national AI policy, etc.) alongside general AI news.
+  { name: "AI News (artificialintelligence-news.com)", url: "https://www.artificialintelligence-news.com/feed/rss/" },
   { name: "Future of Privacy Forum", url: "https://fpf.org/feed/" },
   { name: "Norton Rose Fulbright -- Data Protection Report", url: "https://feeds.feedburner.com/DataProtectionReport" },
 ];
