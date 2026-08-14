@@ -9,15 +9,24 @@
 // commit -- no separate deploy step needed here.
 //
 // WHAT THIS DOES: checks a curated list of real, authoritative
-// cybersecurity/capacity-building sources (see CURATED_SOURCES below)
-// for genuinely new content, asks gpt-4o-mini whether each item is a
-// real, substantive development relevant to national cybersecurity
+// cybersecurity/privacy/capacity-building sources (see CURATED_SOURCES
+// below -- including Cybil Portal, a real public aggregator of actual
+// GCSCC CMM country review reports) for genuinely new content, asks
+// gpt-4o-mini whether each item is a real, substantive development
+// relevant to national or organizational cybersecurity OR privacy
 // capacity building (not just noise), and for anything that passes,
 // generates a properly-structured knowledge chunk matching the same
 // {id, title, text} shape used throughout cybersecurityKnowledgeBase.js.
-// Auto-applies everything that passes -- per explicit request, no
-// manual review step -- but writes ONLY into the clearly-separated
-// CYBERSECURITY_DAILY_UPDATE_CHUNKS array, never touching the
+// Items specifically about ONE country's CMM review, cybersecurity
+// strategy, or privacy/data-protection legislation status get the
+// country name tagged directly in the chunk title (e.g. "[Kenya]
+// Completes..."), so later semantic retrieval by country name is more
+// reliable -- per explicit request to keep GARNET aware of real,
+// individual country reports as they're published, for both
+// cybersecurity and privacy. Auto-applies everything that passes --
+// per explicit request, no manual review step -- but writes ONLY into
+// the clearly-separated CYBERSECURITY_DAILY_UPDATE_CHUNKS array, never
+// touching the
 // hand-curated CYBERSECURITY_CORE_KNOWLEDGE_CHUNKS above it.
 //
 // SOURCES -- a genuinely curated list of ~15 real, legitimate,
@@ -43,6 +52,16 @@ const CURATED_SOURCES = [
   { name: "ISACA", url: "https://www.isaca.org/rssfeeds/isaca-now-blog" },
   { name: "OECD Digital Security", url: "https://www.oecd.org/digital/rss.xml" },
   { name: "Council of Europe -- Cybercrime/Octopus", url: "https://www.coe.int/en/web/cybercrime/rss" },
+  // Per explicit request: keeps GARNET aware of real, individual
+  // country CMM review reports as they're published, not just general
+  // cybersecurity news. Cybil Portal is a real, confirmed public
+  // aggregator specifically of actual CMM country review reports
+  // (Brazil, Nauru, Tunisia, Mongolia, Kuwait, etc. -- GCSCC's own site
+  // confirms 20+ published country reports exist). WordPress sites
+  // (which Cybil Portal is) commonly expose /feed/ as a standard RSS
+  // endpoint -- verify/adjust in the Action's logs if this specific
+  // URL doesn't resolve, same as any other source here.
+  { name: "Cybil Portal -- CMM Country Reports", url: "https://cybilportal.org/publications/portal-of-cybersecurity-capacity-maturity-model-cmm-review-reports/feed/" },
 ];
 
 // Keeps the daily-update section from growing unbounded over time --
@@ -107,7 +126,9 @@ async function evaluateAndSummarize(item) {
       {
         role: "system",
         content:
-          "You are screening real cybersecurity news items for relevance to national cybersecurity capacity building (the GCSCC's Cybersecurity Capacity Maturity Model, covering: national strategy, incident response, critical infrastructure protection, defence; cybersecurity culture/trust/awareness in society; education and professional training; legal/regulatory frameworks and cybercrime law; and standards/technologies/security controls). Respond with ONLY a JSON object, no other text: {\"relevant\": true/false, \"title\": \"a short descriptive title if relevant\", \"summary\": \"a factual 2-4 sentence summary if relevant, based ONLY on the real title/source given -- do not invent specifics you don't actually have\"}. Mark relevant:false for anything that's just routine vendor marketing, a minor product update, or not genuinely about national/organizational capacity building.",
+          "You are screening real news items for relevance to national or organizational capacity building in cybersecurity OR privacy (the GCSCC's Cybersecurity Capacity Maturity Model dimensions: national strategy, incident response, critical infrastructure, defence, culture/awareness, education/training, legal/regulatory frameworks, standards/technologies -- AND privacy capacity: data protection legislation, enforcement authorities, individual rights, cross-border data flows). " +
+          "Respond with ONLY a JSON object, no other text: {\"relevant\": true/false, \"country\": \"the real country name if this is specifically about ONE country's capacity/report/review, else null\", \"title\": \"a short descriptive title if relevant -- if a country was identified, put the country name at the start in brackets, e.g. '[Kenya] Completes National Cybersecurity Strategy Review'\", \"summary\": \"a factual 2-4 sentence summary if relevant, based ONLY on the real title/source given -- do not invent specifics you don't actually have\"}. " +
+          "Mark relevant:false for anything that's just routine vendor marketing, a minor product update, or not genuinely about national/organizational cybersecurity or privacy capacity building. Prioritize marking relevant:true for anything about a SPECIFIC country's CMM review, cybersecurity strategy, or data protection/privacy legislation status -- these are especially valuable to capture.",
       },
       {
         role: "user",
