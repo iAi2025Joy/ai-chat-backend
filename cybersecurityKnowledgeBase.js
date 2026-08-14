@@ -241,7 +241,58 @@ export const CYBERSECURITY_CORE_KNOWLEDGE_CHUNKS = [
 // into the hand-curated foundational content above) for the same
 // organizational/safety reasons as CYBERSECURITY_DAILY_UPDATE_CHUNKS.
 // ------------------------------------------------------------------
-export const PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS = [];
+export const PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS = [
+  {
+    "id": "privacy-weekly-2026-08-14-1",
+    "title": "[2026-08-14] [United States] [United States] A New Design Code Takes Root in the Garden State",
+    "text": "The Future of Privacy Forum discusses New Jersey's recently implemented Digital Advertising Accountability Guidelines, which aims to enhance the protection of consumers' privacy rights in the digital advertising ecosystem. This initiative is part of a broader trend within the U.S. to establish more robust frameworks for data protection at state and local levels. (Source: Future of Privacy Forum, https://fpf.org/blog/a-new-design-code-takes-root-in-the-garden-state/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-14-2",
+    "title": "[2026-08-14] [European Union] [European Union] CADA: An (E)U-turn on AI regulation",
+    "text": "The article discusses the new proposal for AI regulation under the Comprehensive AI Data Act (CADA) in the European Union, indicating a shift in strategy. It explores the implications of this proposed regulation on existing frameworks and how it aims to address the challenges posed by AI technologies. (Source: Future of Privacy Forum, https://fpf.org/blog/cada-an-eu-turn-on-ai-regulation/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-14-3",
+    "title": "[2026-08-14] [Global] FPF and Leading Companies Release Risk Assessment Framework and Updated Best Practices for AI in Hiring & Employment",
+    "text": "The Future of Privacy Forum (FPF) has collaborated with leading companies to release a new risk assessment framework and updated best practices aimed at guiding the use of artificial intelligence in hiring and employment practices. This initiative seeks to address ethical considerations and promote accountability in AI systems used for recruitment and workforce management. (Source: Future of Privacy Forum, https://fpf.org/press-releases/fpf-and-leading-companies-release-risk-assessment-framework-and-updated-best-practices-for-ai-in-hiring-employment/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-14-4",
+    "title": "[2026-08-14] [USA] FPF Statement on the Senior Chatbot Protection Bill",
+    "text": "The Future of Privacy Forum (FPF) has issued a statement regarding the Senior Chatbot Protection Bill, emphasizing the importance of ensuring the safety and privacy of seniors who interact with chatbots. The organization advocates for protections that respect user privacy while also supporting innovation in AI technologies. (Source: Future of Privacy Forum, https://fpf.org/blog/fpf-statement-on-the-senior-chatbot-protection-bill/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-14-5",
+    "title": "[2026-08-14] [EU] The AI Act Implementation Timeline: What Changes Under the AI Omnibus?",
+    "text": "The article discusses the implementation timeline for the EU Artificial Intelligence Act and outlines changes brought about by the AI Omnibus. It highlights key aspects of the legislation aimed at regulating AI technologies across the European Union. (Source: Future of Privacy Forum, https://fpf.org/blog/the-ai-act-implementation-timeline-what-changes-under-the-ai-omnibus/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-14-6",
+    "title": "[2026-08-14] [United States] [United States] FPF Submits Comments on Colorado AI Rulemaking",
+    "text": "The Future of Privacy Forum has submitted comments to assist in the rulemaking processes regarding automated decision-making technology and chatbots in Colorado. This initiative aims to ensure that the regulations consider privacy and ethical implications associated with AI systems. (Source: Future of Privacy Forum, https://fpf.org/blog/fpf-submits-comments-to-inform-colorado-automated-decision-making-technology-and-chatbot-rulemaking-processes/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-14-7",
+    "title": "[2026-08-14] [United States] [United States] FPF Releases New Issue Brief on U.S. “Data Broker” Regulatory Landscape",
+    "text": "The Future of Privacy Forum (FPF) has released a new issue brief that examines the regulatory environment surrounding data brokers in the United States. This brief outlines recent legislative developments and the challenges in regulating this sector, highlighting the need for greater transparency and accountability. (Source: Future of Privacy Forum, https://fpf.org/blog/fpf-releases-new-issue-brief-on-u-s-data-broker-regulatory-landscape/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-14-8",
+    "title": "[2026-08-14] [European Union] [European Union] The EU AI Act – Enforcement Timeline",
+    "text": "The article discusses the enforcement timeline for the EU AI Act, detailing when the legislation will become applicable and what implications it has for AI regulation within the European Union. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/07/the-eu-ai-act-when-does-it-become-enforceable-now/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-14-9",
+    "title": "[2026-08-14] [United States] [United States] Rhode Island’s New AI and Healthcare Privacy Law",
+    "text": "Rhode Island has enacted a new law focused on the intersection of artificial intelligence and healthcare privacy. This legislation aims to address how AI technologies can be utilized while ensuring the protection of patient privacy and sensitive health information. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/07/rhode-islands-new-ai-and-healthcare-privacy-law/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-14-10",
+    "title": "[2026-08-14] [Spain] [Spain] Record €18m Fine for IT Service Provider for GDPR Violations",
+    "text": "The Spanish Data Protection Agency has imposed a record €18 million fine on Amadeus, an IT service provider to the aviation sector, for reusing customer data without consent. This action highlights the enforcement of GDPR regulations related to data protection and privacy. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/06/record-e18m-fine-for-amadeus-from-spanish-data-protection-agency-for-gdpr-violations-related-to-use-of-traveller-data-without-consent/)"
+  }
+];
 
 // ------------------------------------------------------------------
 // DAILY AUTO-UPDATE SECTION -- per explicit request, this array is
