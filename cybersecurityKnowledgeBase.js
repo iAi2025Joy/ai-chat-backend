@@ -241,53 +241,7 @@ export const CYBERSECURITY_CORE_KNOWLEDGE_CHUNKS = [
 // into the hand-curated foundational content above) for the same
 // organizational/safety reasons as CYBERSECURITY_DAILY_UPDATE_CHUNKS.
 // ------------------------------------------------------------------
-export const PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS = [
-  {
-    "id": "privacy-weekly-2026-08-14-1",
-    "title": "[2026-08-14] [United States] [United States] A New Design Code Takes Root in the Garden State",
-    "text": "The article discusses the introduction of a new design code in New Jersey aimed at enhancing privacy protections for children online. It highlights the implications of this code on digital platforms and the importance of prioritizing user privacy in design practices. (Source: Future of Privacy Forum, https://fpf.org/blog/a-new-design-code-takes-root-in-the-garden-state/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-14-2",
-    "title": "[2026-08-14] [European Union] [European Union] CADA: An (E)U-turn on AI regulation",
-    "text": "The Future of Privacy Forum discusses the recent developments related to the upcoming AI regulation in the European Union, focusing on the proposed regulation known as CADA. The piece analyzes the implications of CADA for AI governance, addressing how it represents a significant shift in the EU's approach to regulating artificial intelligence. (Source: Future of Privacy Forum, https://fpf.org/blog/cada-an-eu-turn-on-ai-regulation/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-14-3",
-    "title": "[2026-08-14] [Global] FPF and Leading Companies Release Risk Assessment Framework and Updated Best Practices for AI in Hiring & Employment",
-    "text": "The Future of Privacy Forum (FPF) has collaborated with leading companies to unveil a new risk assessment framework and updated best practices aimed at the use of AI in hiring and employment processes. This framework is intended to guide organizations in responsibly implementing AI technologies while addressing potential ethical concerns. (Source: Future of Privacy Forum, https://fpf.org/press-releases/fpf-and-leading-companies-release-risk-assessment-framework-and-updated-best-practices-for-ai-in-hiring-employment/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-14-4",
-    "title": "[2026-08-14] [EU] The AI Act Implementation Timeline: What Changes Under the AI Omnibus?",
-    "text": "This article discusses the implementation timeline of the AI Act and the implications of the AI Omnibus in the European Union. It outlines the expected changes and regulatory requirements associated with the new legislation, aimed at governing the use of artificial intelligence in various sectors. (Source: Future of Privacy Forum, https://fpf.org/blog/the-ai-act-implementation-timeline-what-changes-under-the-ai-omnibus/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-14-5",
-    "title": "[2026-08-14] [United States] [United States] FPF Submits Comments on Colorado Rulemaking for Automated Decision-Making Technology",
-    "text": "The Future of Privacy Forum (FPF) has submitted comments to assist in the Colorado rulemaking processes concerning automated decision-making technology and chatbot usage. This engagement aims to inform the development of regulations addressing ethical and privacy concerns in these technologies. (Source: Future of Privacy Forum, https://fpf.org/blog/fpf-submits-comments-to-inform-colorado-automated-decision-making-technology-and-chatbot-rulemaking-processes/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-14-6",
-    "title": "[2026-08-14] [United States] [United States] FPF Releases New Issue Brief on U.S. 'Data Broker' Regulatory Landscape",
-    "text": "The Future of Privacy Forum has released an issue brief examining the regulatory landscape for data brokers in the United States. The brief discusses current laws and regulations affecting data brokers, as well as potential policy solutions to enhance consumer privacy. (Source: Future of Privacy Forum, https://fpf.org/blog/fpf-releases-new-issue-brief-on-u-s-data-broker-regulatory-landscape/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-14-7",
-    "title": "[2026-08-14] [European Union] [European Union] The EU AI Act – When Does It Become Enforceable Now?",
-    "text": "The article discusses the enforcement timeline of the EU AI Act, which is aimed at regulating artificial intelligence technologies within the EU. It outlines the key provisions and implications for stakeholders as the act moves towards enforcement. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/07/the-eu-ai-act-when-does-it-become-enforceable-now/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-14-8",
-    "title": "[2026-08-14] [United States] [United States] Rhode Island’s New AI and Healthcare Privacy Law",
-    "text": "Rhode Island has enacted a new law focused on privacy in AI within the healthcare sector. This legislation addresses the collection and use of personal health information by AI systems, aiming to enhance the protection of patient data. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/07/rhode-islands-new-ai-and-healthcare-privacy-law/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-14-9",
-    "title": "[2026-08-14] [Spain] [Spain] Record €18m fine for an IT service provider for GDPR violations",
-    "text": "The Spanish data protection agency has imposed a record €18 million fine on Amadeus, an IT service provider for the aviation sector, for violations related to the reuse of customer data without consent. This enforcement action underscores the importance of compliance with GDPR in the handling of personal data. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/06/record-e18m-fine-for-amadeus-from-spanish-data-protection-agency-for-gdpr-violations-related-to-use-of-traveller-data-without-consent/)"
-  }
-];
+export const PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS = [];
 
 // ------------------------------------------------------------------
 // DAILY AUTO-UPDATE SECTION -- per explicit request, this array is
