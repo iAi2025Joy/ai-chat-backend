@@ -201,7 +201,47 @@ export const CYBERSECURITY_CORE_KNOWLEDGE_CHUNKS = [
     text:
       "The Global Cyber Security Capacity Centre (GCSCC) is a programme of the Oxford Martin School, based at the Department of Computer Science, University of Oxford. It is a leading international centre for research on efficient and effective cybersecurity capacity-building, aiming to increase the scale, pace, quality, and impact of capacity-building initiatives worldwide through a comprehensive and nuanced understanding of the cybersecurity capacity landscape. The GCSCC's goal is for its knowledge and research to help nations improve their cybersecurity capacities in a systematic, substantive way, promoting an innovative cyberspace in support of well-being, human rights, and prosperity for all.",
   },
+  // ------------------------------------------------------------------
+  // FOUNDATIONAL PRIVACY LAW AND AI GOVERNANCE CONTENT -- per explicit
+  // request, starting from GDPR and covering global data protection
+  // law plus AI ethics/governance worldwide. Hand-curated, stable
+  // foundational content (unlike the weekly-managed section below,
+  // which tracks ongoing developments) -- these facts don't change
+  // week to week the way specific news items do.
+  // ------------------------------------------------------------------
+  {
+    id: "gdpr-overview",
+    title: "GDPR -- the EU General Data Protection Regulation",
+    text:
+      "The General Data Protection Regulation (GDPR), in force since 25 May 2018, is the European Union's comprehensive data protection law and the single most influential privacy law globally -- most subsequent national data protection laws worldwide have been shaped by or modeled on it (the 'Brussels effect'). Its core principles: lawfulness/fairness/transparency, purpose limitation, data minimization, accuracy, storage limitation, integrity/confidentiality (security), and accountability. It grants individuals real rights: access, rectification, erasure ('right to be forgotten'), data portability, objection, and rights regarding automated decision-making (Article 22 -- individuals can contest purely automated decisions with legal or similarly significant effects). It requires organizations to appoint a Data Protection Officer in many cases, conduct Data Protection Impact Assessments for high-risk processing, and report breaches within 72 hours. Enforcement is via national Data Protection Authorities coordinated through the European Data Protection Board, with fines up to 4% of global annual turnover or 20 million euros, whichever is higher.",
+  },
+  {
+    id: "global-privacy-law-landscape",
+    title: "The global data protection law landscape",
+    text:
+      "As of the mid-2020s, comprehensive data protection/privacy laws are in effect in roughly 144+ countries (per the IAPP's Global Privacy Law and DPA Directory, which tracks over 200 countries), reflecting a sustained global trend since GDPR's 2018 entry into force. Waves of adoption include the EU's own GDPR (2018), followed by GDPR-influenced laws in Brazil (LGPD, 2020), China (PIPL, Personal Information Protection Law, 2021), India (Digital Personal Data Protection Act, implementing rules introduced recently), Saudi Arabia, Thailand, and many others enacting their first comprehensive laws in the 2020s. In the US, there is no single comprehensive federal privacy law -- instead a patchwork of state laws exists, led by California's CCPA/CPRA, plus sectoral federal laws (HIPAA for health data, GLBA for financial data). Countries still without comprehensive laws (e.g. some in the Global South) are often in draft/consideration stages. Reliable, continuously updated sources for current country-by-country status include the IAPP's Global Privacy Law and DPA Directory and UNCTAD's Global Cyberlaw Tracker.",
+  },
+  {
+    id: "ai-governance-landscape",
+    title: "Global AI ethics and governance landscape",
+    text:
+      "The global AI governance landscape centers on a few key real frameworks. The OECD AI Principles (adopted 2019, the first intergovernmental AI standard) have been adopted by 40+ countries and underpin the OECD's AI Policy Observatory (OECD.AI), a live-updated repository now tracking 1,300+ national and international AI policy initiatives across 80+ jurisdictions -- the most comprehensive real tracker of global AI policy. The EU AI Act is the first comprehensive, binding horizontal AI law, using a risk-based approach (unacceptable/high/limited/minimal risk categories) and has become a global reference point other jurisdictions look to when drafting their own AI regulation, similar to GDPR's earlier influence on privacy law. UNESCO's Recommendation on the Ethics of Artificial Intelligence (adopted 2021 by 190+ member states) is the first global standard-setting instrument on AI ethics specifically. Other significant efforts include the G7 Hiroshima AI Process, the UK-hosted global AI Safety Summits (starting November 2023), and various national AI strategies. A recurring theme across these frameworks: AI governance and privacy/data protection increasingly overlap, particularly around automated decision-making, profiling, and algorithmic accountability (e.g. GDPR Article 22-style individual rights are appearing in newer AI-specific laws too).",
+  },
 ];
+
+// ------------------------------------------------------------------
+// PRIVACY LAW & AI GOVERNANCE WEEKLY UPDATE SECTION -- per explicit
+// request, managed by scripts/weeklyPrivacyLawUpdate.mjs, run WEEKLY
+// (not daily -- a deliberately different, slower cadence than the CMM
+// section above, matching how relatively slowly formal law/policy
+// actually changes compared to daily news) via GitHub Actions (see
+// .github/workflows/privacy-law-weekly-update.yml). Tracks real,
+// ongoing global data protection law and AI governance developments
+// per country -- kept in its own clearly-separated array (not mixed
+// into the hand-curated foundational content above) for the same
+// organizational/safety reasons as CYBERSECURITY_DAILY_UPDATE_CHUNKS.
+// ------------------------------------------------------------------
+export const PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS = [];
 
 // ------------------------------------------------------------------
 // DAILY AUTO-UPDATE SECTION -- per explicit request, this array is
@@ -222,8 +262,10 @@ export const CYBERSECURITY_CORE_KNOWLEDGE_CHUNKS = [
 export const CYBERSECURITY_DAILY_UPDATE_CHUNKS = [];
 
 // Combined knowledge base actually used for retrieval (see
-// cybersecurityModel.js) -- core content first, then daily updates.
+// cybersecurityModel.js) -- core content first, then daily/weekly
+// auto-managed updates.
 export const CYBERSECURITY_KNOWLEDGE_CHUNKS = [
   ...CYBERSECURITY_CORE_KNOWLEDGE_CHUNKS,
   ...CYBERSECURITY_DAILY_UPDATE_CHUNKS,
+  ...PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS,
 ];

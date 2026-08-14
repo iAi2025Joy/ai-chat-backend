@@ -173,6 +173,12 @@ const NIST_PRIVACY_FUNCTIONS = [
     description: "Real NIST Privacy Framework Protect-P Function, Maintenance and Protective Technology Categories: system maintenance and protective technology are managed consistent with privacy risk strategy, including secure data disposal.",
     question: "How does your organization securely dispose of personal data when no longer needed, and does your incident response plan specifically address personal data breaches (including notification obligations)?",
   },
+  {
+    id: "PF-AI-1",
+    name: "AI Governance & Automated Decision-Making",
+    description: "Real, current intersection of privacy and AI governance: GDPR Article 22 and similar global laws give individuals rights regarding automated decision-making with legal/significant effects; the NIST AI Risk Management Framework and emerging global AI governance norms (OECD AI Principles, EU AI Act) increasingly require organizations to assess AI systems' privacy impact specifically.",
+    question: "Does your organization use AI or automated decision-making systems that process personal data (e.g. profiling, automated approvals/denials)? Describe what governance, human oversight, and individual-rights processes exist for these systems specifically.",
+  },
 ];
 
 // country + privacy: synthesized from the real OECD Privacy Guidelines'
@@ -235,6 +241,18 @@ const COUNTRY_PRIVACY_AREAS = [
     name: "Cross-Border Data Transfer Rules",
     description: "Whether the country has clear, compatible rules for cross-border data transfers (e.g. adequacy mechanisms, standard contractual clauses, binding corporate rules) -- essential for a country's participation in the global digital economy per UNCTAD's analysis.",
     question: "Does your country have clear legal rules for transferring personal data across borders (e.g. adequacy decisions, contractual safeguards)? Describe how compatible these are with major trading partners' regimes.",
+  },
+  {
+    id: "PRIV-C6-1",
+    name: "National AI Governance Framework",
+    description: "Real, current national capacity area: whether the country has adopted a national AI strategy or governance framework aligned with international norms -- the OECD AI Principles (adopted by 40+ countries, tracked via the real OECD.AI Policy Observatory covering 1,300+ initiatives across 80+ jurisdictions), the EU AI Act (the first comprehensive AI law, now a global reference point), or UNESCO's Recommendation on the Ethics of AI.",
+    question: "Does your country have a national AI strategy, AI governance framework, or AI-specific legislation? Describe its scope and how it relates to international frameworks (OECD AI Principles, EU AI Act, UNESCO AI Ethics Recommendation).",
+  },
+  {
+    id: "PRIV-C6-2",
+    name: "Algorithmic Accountability & Automated Decision-Making",
+    description: "Whether national law gives individuals real rights regarding automated/algorithmic decision-making affecting them (mirroring GDPR Article 22, now a common feature of newer global data protection laws), and whether any oversight body has authority over algorithmic accountability specifically.",
+    question: "Does your country's legal framework give individuals rights regarding automated decisions that significantly affect them (e.g. a right to explanation or human review), and is there any regulatory oversight of algorithmic/AI accountability specifically?",
   },
 ];
 
