@@ -1,0 +1,57 @@
+name: Weekly Privacy Law & AI Governance Update
+
+# Runs scripts/weeklyPrivacyLawUpdate.mjs on a weekly schedule -- a
+# deliberately different, slower cadence than the daily CMM update
+# (see cmm-daily-update.yml), matching how formal law/policy genuinely
+# changes more slowly than general news, per explicit request. Same
+# overall mechanism: commits any real changes directly to this repo;
+# Render's existing auto-deploy-on-push then redeploys with the
+# updated knowledge base automatically.
+on:
+  schedule:
+    # 07:00 UTC every Monday. GitHub's scheduled workflows can run a
+    # few minutes late during high-load periods -- expected/normal
+    # behavior for GitHub Actions schedules generally.
+    - cron: "0 7 * * 1"
+  # Lets you trigger a run manually from the Actions tab any time,
+  # without waiting for the schedule -- useful for testing this after
+  # first setting it up, or re-running on demand.
+  workflow_dispatch: {}
+
+jobs:
+  update-privacy-law-knowledge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to commit the updated knowledge base file back to this repo
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run weekly privacy law & AI governance update
+        env:
+          # Must already exist as a repo secret from setting up the
+          # daily CMM update workflow -- the SAME secret, no need to
+          # add it twice (both workflows read the same
+          # OPENAI_API_KEY secret).
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: node scripts/weeklyPrivacyLawUpdate.mjs
+
+      - name: Commit and push if the knowledge base changed
+        run: |
+          git config user.name "GARNET Weekly Privacy Law Update"
+          git config user.email "actions@github.com"
+          if git diff --quiet -- cybersecurityKnowledgeBase.js; then
+            echo "No changes to commit this week."
+          else
+            git add cybersecurityKnowledgeBase.js
+            git commit -m "Weekly privacy law & AI governance update ($(date -u +%Y-%m-%d))"
+            git push
+          fi
