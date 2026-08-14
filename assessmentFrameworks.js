@@ -179,6 +179,12 @@ const NIST_PRIVACY_FUNCTIONS = [
     description: "Real, current intersection of privacy and AI governance: GDPR Article 22 and similar global laws give individuals rights regarding automated decision-making with legal/significant effects; the NIST AI Risk Management Framework and emerging global AI governance norms (OECD AI Principles, EU AI Act) increasingly require organizations to assess AI systems' privacy impact specifically.",
     question: "Does your organization use AI or automated decision-making systems that process personal data (e.g. profiling, automated approvals/denials)? Describe what governance, human oversight, and individual-rights processes exist for these systems specifically.",
   },
+  {
+    id: "PF-DEV-1",
+    name: "Privacy-Invasive Devices & Monitoring Technology",
+    description: "A real, concrete privacy risk area beyond formal policy: the actual devices and technologies deployed that can collect data about employees, customers, or the public -- CCTV/video surveillance, facial recognition or other biometric systems (fingerprint/iris scanners for access control), workplace monitoring software (keystroke logging, screen recording, location tracking of company devices), IoT/smart devices, and website/app tracking technologies (cookies, device fingerprinting, ad trackers). NIST Privacy Framework's Protect-P function explicitly covers technology deployed in a way that's consistent with privacy risk strategy.",
+    question: "List the specific devices/technologies your organization actually uses that could collect personal data about people (e.g. CCTV cameras, facial/biometric recognition, employee monitoring software, IoT sensors, website trackers/cookies). For each, describe what data is collected, how long it's kept, and whether people are informed about it.",
+  },
 ];
 
 // country + privacy: synthesized from the real OECD Privacy Guidelines'
@@ -253,6 +259,12 @@ const COUNTRY_PRIVACY_AREAS = [
     name: "Algorithmic Accountability & Automated Decision-Making",
     description: "Whether national law gives individuals real rights regarding automated/algorithmic decision-making affecting them (mirroring GDPR Article 22, now a common feature of newer global data protection laws), and whether any oversight body has authority over algorithmic accountability specifically.",
     question: "Does your country's legal framework give individuals rights regarding automated decisions that significantly affect them (e.g. a right to explanation or human review), and is there any regulatory oversight of algorithmic/AI accountability specifically?",
+  },
+  {
+    id: "PRIV-C7-1",
+    name: "National Surveillance & Monitoring Infrastructure",
+    description: "A real, concrete national privacy risk area beyond formal legislation: the actual surveillance technologies deployed at national/municipal scale -- public CCTV networks, facial recognition systems used by police or government agencies, license plate readers, communications interception/lawful intercept capabilities, biometric ID/national identity systems, and 'smart city' IoT sensor networks. Real oversight and legal limits on these are a genuine differentiator between countries, not just whether privacy legislation exists on paper.",
+    question: "What large-scale surveillance or monitoring technologies does your country deploy or permit (e.g. public CCTV/facial recognition networks, government communications interception, national biometric ID systems, smart-city sensor networks)? Describe what legal limits, judicial oversight, or public disclosure requirements exist for their use.",
   },
 ];
 
