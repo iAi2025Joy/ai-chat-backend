@@ -97,9 +97,10 @@ export function formatMarkdownToHTML(text) {
     /```cmm-report\s*\n([\s\S]*?)```/g,
     (match, reportJsonRaw) => {
       const placeholder = `@@CMM_REPORT_BLOCK_${cmmReportBlocks.length}@@`;
+      let parsedReport;
       let safeJson = "{}";
       try {
-        const parsedReport = JSON.parse(reportJsonRaw.trim());
+        parsedReport = JSON.parse(reportJsonRaw.trim());
         safeJson = JSON.stringify(parsedReport)
           .replace(/&/g, "&amp;")
           .replace(/"/g, "&quot;")
@@ -110,7 +111,17 @@ export function formatMarkdownToHTML(text) {
         cmmReportBlocks.push(`<p><em>(Report download could not be prepared -- invalid report data.)</em></p>`);
         return placeholder;
       }
+      // Same "Done for [project] -- [Country/Company]: [name] -- Date:
+      // [date]" completion line the Structured Form path shows, per
+      // explicit request -- built here so a completed Guided
+      // Conversation report looks identical to a Structured Form one.
+      const entityLabel = parsedReport.level === "company" ? "Company/Organization" : "Country";
+      const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+      const escapeText = (s) =>
+        String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const completionLine = `<p style="margin-top:18px;"><strong>Done for Project: ${escapeText(parsedReport.projectName || "Untitled Assessment")} -- ${escapeText(entityLabel)}: ${escapeText(parsedReport.entityName || "N/A")} -- Date: ${escapeText(dateStr)}</strong></p>`;
       cmmReportBlocks.push(
+        completionLine +
         `<div class="cmm-report-download" data-cmm-report="${safeJson}"><button class="cmm-report-download-btn" onclick="downloadCmmReportFromMessage(this)">📄 Download Full Report (Word)</button></div>`
       );
       return placeholder;

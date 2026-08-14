@@ -49,81 +49,129 @@ export const ASSESSMENT_DOMAINS = {
 export const CMM_STAGE_NAMES = ["Unable to assess", "Start-up", "Formative", "Established", "Strategic", "Dynamic"];
 export const NIST_TIER_NAMES = ["Unable to assess", "Partial", "Risk Informed", "Repeatable", "Adaptive"];
 
-// company + cybersecurity: real NIST Cybersecurity Framework content.
+// company + cybersecurity: real NIST Cybersecurity Framework content,
+// expanded into real Categories within each Function (not just one
+// broad question per Function) per explicit request to collect as
+// much detail as possible about systems, policies, and processes.
 const NIST_CSF_FUNCTIONS = [
   {
-    id: "CSF-ID",
-    name: "Identify",
-    description:
-      "Develop an organizational understanding to manage cybersecurity risk to systems, people, assets, data, and capabilities -- asset management, business environment, governance, risk assessment, risk management strategy, and supply chain risk management.",
-    question: "How well does your organization understand and inventory its assets, data, business context, and cybersecurity risks (including supply chain risk)? Describe your current practices.",
+    id: "CSF-ID-1",
+    name: "Identify -- Asset Management & Business Environment",
+    description: "Real NIST CSF Identify Function, Asset Management and Business Environment Categories: the data, personnel, devices, systems, and facilities that enable the organization to achieve business purposes are identified and managed consistent with their relative importance to business objectives and risk strategy.",
+    question: "What systems, devices, data, and personnel does your organization have an inventory of, and how is that inventory kept current? Describe the actual tools/processes used (e.g. asset management software, spreadsheets, none).",
   },
   {
-    id: "CSF-PR",
-    name: "Protect",
-    description:
-      "Develop and implement appropriate safeguards to ensure delivery of critical services -- identity management and access control, awareness and training, data security, information protection processes, maintenance, and protective technology.",
-    question: "Describe your organization's safeguards: access control, employee security training, data protection, and protective technology in place.",
+    id: "CSF-ID-2",
+    name: "Identify -- Risk Assessment & Governance",
+    description: "Real NIST CSF Identify Function, Risk Assessment and Governance Categories: the organization understands the cybersecurity risk to operations, assets, and individuals, and the policies/procedures/processes to manage and monitor regulatory, legal, and operational requirements are understood and inform risk management.",
+    question: "Describe your organization's risk assessment process: how often is it done, who does it, and how do results inform decisions? What governance policies exist (e.g. an information security policy) and who owns them?",
   },
   {
-    id: "CSF-DE",
-    name: "Detect",
-    description:
-      "Develop and implement appropriate activities to identify the occurrence of a cybersecurity event -- anomalies and events, security continuous monitoring, and detection processes.",
-    question: "Describe your organization's ability to detect cybersecurity incidents -- monitoring capabilities, anomaly detection, and how quickly incidents are typically noticed.",
+    id: "CSF-PR-1",
+    name: "Protect -- Identity Management & Access Control",
+    description: "Real NIST CSF Protect Function, Identity Management, Authentication and Access Control Category: access to physical and logical assets is limited to authorized users, processes, and devices, and managed consistent with assessed risk.",
+    question: "Describe your access control systems and processes: how are user accounts/permissions granted and revoked, is multi-factor authentication used, and how are privileged accounts managed?",
   },
   {
-    id: "CSF-RS",
-    name: "Respond",
-    description:
-      "Develop and implement appropriate activities to take action regarding a detected cybersecurity incident -- response planning, communications, analysis, mitigation, and improvements.",
-    question: "Describe your organization's incident response capability: do you have a response plan, defined communication procedures, and a process for learning from incidents?",
+    id: "CSF-PR-2",
+    name: "Protect -- Data Security & Awareness Training",
+    description: "Real NIST CSF Protect Function, Data Security and Awareness/Training Categories: information and records are managed consistent with risk strategy to protect confidentiality/integrity/availability, and personnel are provided cybersecurity awareness education.",
+    question: "Describe your data protection practices (encryption at rest/in transit, backups, data classification) and your employee security awareness/training program, if any.",
   },
   {
-    id: "CSF-RC",
-    name: "Recover",
-    description:
-      "Develop and implement appropriate activities to maintain plans for resilience and to restore capabilities or services impaired by a cybersecurity incident -- recovery planning, improvements, and communications.",
-    question: "Describe your organization's ability to recover from a cybersecurity incident: backup/recovery plans, business continuity, and post-incident communication practices.",
+    id: "CSF-DE-1",
+    name: "Detect -- Anomalies & Continuous Monitoring",
+    description: "Real NIST CSF Detect Function, Anomalies and Events, and Security Continuous Monitoring Categories: anomalous activity is detected and the potential impact understood, and information systems/assets are monitored to identify cybersecurity events.",
+    question: "What systems or processes does your organization use to monitor for suspicious activity (e.g. SIEM, log monitoring, endpoint detection)? How is monitoring coverage across your systems?",
+  },
+  {
+    id: "CSF-DE-2",
+    name: "Detect -- Detection Processes",
+    description: "Real NIST CSF Detect Function, Detection Processes Category: detection processes and procedures are maintained and tested to ensure awareness of anomalous events.",
+    question: "How are detection processes tested and improved over time? Who is responsible for reviewing alerts, and how quickly are real incidents typically identified?",
+  },
+  {
+    id: "CSF-RS-1",
+    name: "Respond -- Response Planning & Communications",
+    description: "Real NIST CSF Respond Function, Response Planning and Communications Categories: response processes/procedures are executed and maintained, and response activities are coordinated with internal/external stakeholders.",
+    question: "Does your organization have a documented incident response plan? Who is on the response team, and what are the internal/external (e.g. regulators, customers) communication procedures during an incident?",
+  },
+  {
+    id: "CSF-RS-2",
+    name: "Respond -- Analysis & Mitigation",
+    description: "Real NIST CSF Respond Function, Analysis and Mitigation Categories: analysis is conducted to ensure effective response and support recovery activities, and activities are performed to prevent expansion of an event and resolve it.",
+    question: "Describe your process for investigating and containing an incident once detected, and how lessons learned are captured and fed back into your defenses.",
+  },
+  {
+    id: "CSF-RC-1",
+    name: "Recover -- Recovery Planning",
+    description: "Real NIST CSF Recover Function, Recovery Planning Category: recovery processes and procedures are executed and maintained to ensure restoration of systems/assets affected by cybersecurity incidents.",
+    question: "Describe your backup and disaster recovery systems and processes: what is backed up, how often, where, and has recovery ever actually been tested?",
+  },
+  {
+    id: "CSF-RC-2",
+    name: "Recover -- Improvements & Communications",
+    description: "Real NIST CSF Recover Function, Improvements and Communications Categories: recovery planning incorporates lessons learned, and restoration activities are coordinated with internal/external parties.",
+    question: "How does your organization capture lessons learned after an incident to improve recovery plans, and what is your process for communicating recovery status to stakeholders?",
   },
 ];
 
-// company + privacy: real NIST Privacy Framework content.
+// company + privacy: real NIST Privacy Framework content, expanded
+// into real sub-areas within each Function per explicit request.
 const NIST_PRIVACY_FUNCTIONS = [
   {
-    id: "PF-ID",
-    name: "Identify-P",
-    description:
-      "Develop the organizational understanding to manage privacy risk for individuals arising from data processing -- inventorying data processing, understanding business environment, governance, and risk assessment.",
-    question: "How well does your organization understand and inventory what personal data it processes, why, and the privacy risks this creates for individuals? Describe your current practices.",
+    id: "PF-ID-1",
+    name: "Identify-P -- Data Inventory & Mapping",
+    description: "Real NIST Privacy Framework Identify-P Function, Inventory and Mapping Category: data processing by systems, products, or services is understood and informs the management of privacy risk.",
+    question: "Does your organization maintain an inventory or map of what personal data it collects, where it's stored, and where it flows (including third parties)? Describe the actual system or process used.",
   },
   {
-    id: "PF-GV",
-    name: "Govern-P",
-    description:
-      "Develop and implement the organizational governance structure to enable an ongoing understanding of the organization's risk management priorities that are informed by privacy risk -- policies, roles, legal/regulatory awareness, and risk management strategy.",
-    question: "Describe your organization's privacy governance: do you have clear policies, an accountable owner (e.g. a privacy officer), and awareness of relevant privacy laws (e.g. GDPR, CCPA)?",
+    id: "PF-ID-2",
+    name: "Identify-P -- Risk Assessment",
+    description: "Real NIST Privacy Framework Identify-P Function, Risk Assessment Category: the organization understands privacy risks to individuals arising from data processing.",
+    question: "Does your organization conduct privacy impact assessments (PIAs/DPIAs) before new data processing activities? How often, and who is involved?",
   },
   {
-    id: "PF-CT",
-    name: "Control-P",
-    description:
-      "Develop and implement appropriate activities to enable organizations or individuals to manage data with sufficient granularity to manage privacy risks -- data processing management and disassociated processing.",
-    question: "Describe how individuals can exercise control over their data with your organization (e.g. access, correction, deletion requests) and how granularly you manage data processing.",
+    id: "PF-GV-1",
+    name: "Govern-P -- Policies & Roles",
+    description: "Real NIST Privacy Framework Govern-P Function, Governance Policies and Organizational Risk Management Roles Categories: the policies, processes, and procedures to manage privacy risk are established and communicated, with defined roles.",
+    question: "Describe your organization's privacy policies and governance structure: is there a written privacy policy, a designated privacy officer, and clear accountability for privacy decisions?",
   },
   {
-    id: "PF-CM",
-    name: "Communicate-P",
-    description:
-      "Develop and implement appropriate activities to enable organizations and individuals to have a reliable understanding and engage in a dialogue about how data is processed and associated privacy risks -- transparency and communication policies.",
-    question: "Describe how transparently your organization communicates its data practices to individuals (privacy notices, plain-language explanations, proactive communication about changes).",
+    id: "PF-GV-2",
+    name: "Govern-P -- Legal & Regulatory Awareness",
+    description: "Real NIST Privacy Framework Govern-P Function, Awareness and Training, and Monitoring and Review Categories: personnel understand their roles and legal/regulatory requirements, and the governance approach is reviewed.",
+    question: "Which privacy laws/regulations apply to your organization (e.g. GDPR, CCPA, national laws), and how does your organization stay current with and train staff on these requirements?",
   },
   {
-    id: "PF-PR",
-    name: "Protect-P",
-    description:
-      "Develop and implement appropriate data processing safeguards -- data protection policies, processes, procedures, identity management, access control, and protective technology, informed by privacy risk.",
-    question: "Describe the technical and organizational safeguards protecting personal data at your organization (encryption, access controls, data minimization, secure disposal).",
+    id: "PF-CT-1",
+    name: "Control-P -- Data Subject Rights & Consent",
+    description: "Real NIST Privacy Framework Control-P Function, Data Processing Management Category: individuals' data processing preferences and requests are enabled and managed.",
+    question: "How can individuals exercise rights over their data (access, correction, deletion, opt-out) with your organization in practice? Describe the actual process and typical response time.",
+  },
+  {
+    id: "PF-CT-2",
+    name: "Control-P -- Data Minimization & Retention",
+    description: "Real NIST Privacy Framework Control-P Function, Disassociated Processing Category: data processing solutions increase disassociability consistent with organizational risk strategy (e.g. minimization, retention limits).",
+    question: "Does your organization have data minimization and retention policies (only collecting/keeping what's needed, for how long)? Describe how these are actually enforced technically or procedurally.",
+  },
+  {
+    id: "PF-CM-1",
+    name: "Communicate-P -- Privacy Notices & Transparency",
+    description: "Real NIST Privacy Framework Communicate-P Function, Communication Policies Category: reliable, clear, and accessible information is provided about how data is processed.",
+    question: "Describe your organization's privacy notices/policies shown to individuals: are they clear and accessible, and how often are they updated?",
+  },
+  {
+    id: "PF-PR-1",
+    name: "Protect-P -- Technical Safeguards",
+    description: "Real NIST Privacy Framework Protect-P Function, Data Protection Policies/Processes/Procedures Category: policies/processes/procedures are maintained to manage protection of data consistent with risk strategy.",
+    question: "Describe the technical safeguards protecting personal data specifically (encryption, pseudonymization/anonymization, access controls specific to personal data).",
+  },
+  {
+    id: "PF-PR-2",
+    name: "Protect-P -- Data Disposal & Incident Response",
+    description: "Real NIST Privacy Framework Protect-P Function, Maintenance and Protective Technology Categories: system maintenance and protective technology are managed consistent with privacy risk strategy, including secure data disposal.",
+    question: "How does your organization securely dispose of personal data when no longer needed, and does your incident response plan specifically address personal data breaches (including notification obligations)?",
   },
 ];
 
@@ -131,42 +179,62 @@ const NIST_PRIVACY_FUNCTIONS = [
 // 8 principles (the actual foundational framework most national data
 // protection laws build on) plus real national-capacity areas UNCTAD's
 // Global Cyberlaw Tracker and the Council of Europe's Convention 108+
-// actually assess.
+// actually assess -- expanded into more granular sub-areas per
+// explicit request.
 const COUNTRY_PRIVACY_AREAS = [
   {
-    id: "PRIV-C1",
-    name: "Legislation & Legal Basis",
-    description:
-      "Whether comprehensive data protection/privacy legislation exists, reflecting the OECD's core principles (Collection Limitation, Data Quality, Purpose Specification, Use Limitation) -- the foundational element UNCTAD's Global Cyberlaw Tracker measures first for every country.",
-    question: "Does your country have comprehensive data protection/privacy legislation? Describe its scope, what principles it covers, and how long it has been in force.",
+    id: "PRIV-C1-1",
+    name: "Legislation -- Scope & Core Principles",
+    description: "Whether comprehensive data protection/privacy legislation exists, reflecting the OECD's core principles (Collection Limitation, Data Quality, Purpose Specification, Use Limitation) -- the foundational element UNCTAD's Global Cyberlaw Tracker measures first for every country.",
+    question: "Does your country have comprehensive data protection/privacy legislation? Describe its scope (sectors/data types covered), what core principles it embeds, and how long it has been in force.",
   },
   {
-    id: "PRIV-C2",
-    name: "Enforcement Authority",
-    description:
-      "Whether an empowered, independent Data Protection Authority (DPA) or equivalent enforcement body exists with real investigative and sanctioning power -- a key real-world differentiator between countries with privacy laws on paper versus laws that are actually enforced.",
-    question: "Does your country have an independent authority responsible for enforcing privacy/data protection law? Describe its powers, independence, and track record of enforcement.",
+    id: "PRIV-C1-2",
+    name: "Legislation -- Sector-Specific & Related Laws",
+    description: "Whether sector-specific privacy rules exist (health, financial, telecommunications) alongside general legislation, and whether related laws (cybercrime, consumer protection) reinforce privacy protection, as UNCTAD's tracker separately assesses.",
+    question: "Are there sector-specific privacy laws (e.g. for health or financial data) in your country, and how do they relate to the general data protection law?",
   },
   {
-    id: "PRIV-C3",
-    name: "Individual Rights & Security Safeguards",
-    description:
-      "Whether individuals have real, exercisable rights over their data (access, correction, deletion, objection) and whether Security Safeguards -- an explicit OECD principle -- are legally required of data controllers, including breach notification.",
-    question: "What rights do individuals in your country legally have over their personal data, and are organizations legally required to implement security safeguards and notify people of data breaches?",
+    id: "PRIV-C2-1",
+    name: "Enforcement Authority -- Independence & Powers",
+    description: "Whether an empowered, independent Data Protection Authority (DPA) or equivalent enforcement body exists with real investigative and sanctioning power -- a key real-world differentiator between countries with privacy laws on paper versus laws that are actually enforced.",
+    question: "Does your country have an independent authority responsible for enforcing privacy/data protection law? Describe its independence from government/industry and its actual legal powers (investigation, fines, orders).",
   },
   {
-    id: "PRIV-C4",
+    id: "PRIV-C2-2",
+    name: "Enforcement Authority -- Track Record & Resources",
+    description: "Whether the enforcement authority has genuine capacity (staffing, budget) and an actual track record of enforcement action, not just formal existence on paper.",
+    question: "What is the enforcement authority's actual track record (recent enforcement actions, fines issued), and does it appear adequately resourced/staffed for its mandate?",
+  },
+  {
+    id: "PRIV-C3-1",
+    name: "Individual Rights",
+    description: "Whether individuals have real, exercisable rights over their data (access, correction, deletion, objection) -- an explicit OECD Individual Participation principle.",
+    question: "What rights do individuals in your country legally have over their personal data (access, correction, deletion, objection, portability), and how easily can these be exercised in practice?",
+  },
+  {
+    id: "PRIV-C3-2",
+    name: "Security Safeguards & Breach Notification",
+    description: "Whether Security Safeguards -- an explicit OECD principle -- are legally required of data controllers, including mandatory breach notification to authorities and affected individuals.",
+    question: "Are organizations in your country legally required to implement security safeguards for personal data, and is there a mandatory breach notification requirement (to a regulator and/or affected individuals)?",
+  },
+  {
+    id: "PRIV-C4-1",
     name: "Openness & Accountability",
-    description:
-      "Whether the OECD's Openness principle (a general policy of transparency about data practices) and Accountability principle (data controllers being held responsible for compliance) are reflected in practice, not just in law text.",
-    question: "In practice, how transparent are organizations in your country expected to be about their data practices, and how are they actually held accountable for compliance?",
+    description: "Whether the OECD's Openness principle (a general policy of transparency about data practices) and Accountability principle (data controllers being held responsible for compliance) are reflected in practice, not just in law text.",
+    question: "In practice, how transparent are organizations in your country expected to be about their data practices, and how are they actually held accountable for compliance (audits, certifications, liability)?",
   },
   {
-    id: "PRIV-C5",
-    name: "International Engagement & Cross-Border Data Flows",
-    description:
-      "Whether the country participates in international privacy instruments (e.g. Council of Europe's Convention 108+, the only legally binding multilateral data protection instrument) and has clear, compatible cross-border data transfer rules -- both real, tracked indicators of national privacy capacity maturity.",
-    question: "Does your country participate in international privacy/data protection agreements (e.g. Convention 108+), and does it have clear rules for cross-border data transfers?",
+    id: "PRIV-C5-1",
+    name: "International Instruments",
+    description: "Whether the country participates in international privacy instruments, particularly the Council of Europe's Convention 108+, the only legally binding multilateral data protection instrument -- a real, tracked indicator of national privacy capacity maturity.",
+    question: "Does your country participate in international privacy/data protection agreements (e.g. Convention 108+, regional frameworks)? Describe its level of engagement.",
+  },
+  {
+    id: "PRIV-C5-2",
+    name: "Cross-Border Data Transfer Rules",
+    description: "Whether the country has clear, compatible rules for cross-border data transfers (e.g. adequacy mechanisms, standard contractual clauses, binding corporate rules) -- essential for a country's participation in the global digital economy per UNCTAD's analysis.",
+    question: "Does your country have clear legal rules for transferring personal data across borders (e.g. adequacy decisions, contractual safeguards)? Describe how compatible these are with major trading partners' regimes.",
   },
 ];
 

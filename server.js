@@ -1271,7 +1271,7 @@ app.get("/assessment-questions", (req, res) => {
 
 app.post("/assessment-report", rateLimitChat, async (req, res) => {
   try {
-    const { level, domain, projectName, answers } = req.body;
+    const { level, domain, projectName, entityName, answers } = req.body;
     if (!Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({ error: "No assessment answers provided." });
     }
@@ -1283,6 +1283,11 @@ app.post("/assessment-report", rateLimitChat, async (req, res) => {
     if (!structuredReport) {
       return res.status(502).json({ error: "Could not generate the assessment report." });
     }
+    // Per explicit request: the country/company name is shown in the
+    // report's completion line -- attached here rather than asked of
+    // the model, since it's just the person's own real input, not
+    // something to generate.
+    structuredReport.entityName = entityName || null;
     res.json({
       reportHtml: formatMarkdownToHTML(renderCmmReportMarkdown(structuredReport)),
       structuredReport,
