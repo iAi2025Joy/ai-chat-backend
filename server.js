@@ -69,6 +69,8 @@ import {
   renderCmmReportMarkdown,
   buildCmmReportDocx,
 } from "./cybersecurityModel.js";
+import { getAssessmentQuestions, getFrameworkSourceName } from "./assessmentFrameworks.js";
+import { buildGenericAssessmentReport } from "./assessmentReportGenerator.js";
 
 const app = express();
 
@@ -1228,6 +1230,65 @@ app.post("/cmm-assessment-report", rateLimitChat, async (req, res) => {
     });
   } catch (err) {
     console.error("CMM assessment report error:", err.message);
+    res.status(500).json({ error: "Could not generate the assessment report. Please try again." });
+  }
+});
+
+// ------------------------------------------------------------------
+// GENERALIZED ASSESSMENT ENDPOINTS -- per explicit request to support
+// Country vs Company/Organization levels and Cybersecurity vs Privacy
+// domains (4 real combinations total, see assessmentFrameworks.js).
+// country+cybersecurity routes to the existing, already-built CMM
+// functions above; the other 3 combinations route to
+// buildGenericAssessmentReport (assessmentReportGenerator.js), which
+// produces output in the SAME shape so renderCmmReportMarkdown/
+// buildCmmReportDocx work unchanged for all 4 types.
+// ------------------------------------------------------------------
+app.get("/assessment-questions", (req, res) => {
+  const { level, domain } = req.query;
+  if (level === "country" && domain === "cybersecurity") {
+    return res.json({ factors: CMM_ASSESSMENT_FACTORS });
+  }
+  const questions = getAssessmentQuestions(level, domain);
+  if (!questions) {
+    return res.status(400).json({ error: "Unknown level/domain combination." });
+  }
+  // Normalized to the SAME {id, dimension, name, question} shape the
+  // frontend already knows how to render, regardless of which real
+  // underlying framework these came from -- "dimension" here is just
+  // the framework's own name, since NIST CSF/Privacy Framework and the
+  // country-privacy synthesis are flat (no CMM-style sub-grouping).
+  const frameworkSource = getFrameworkSourceName(level, domain);
+  res.json({
+    factors: questions.map((q) => ({
+      id: q.id,
+      dimension: frameworkSource,
+      name: q.name,
+      question: q.question,
+    })),
+  });
+});
+
+app.post("/assessment-report", rateLimitChat, async (req, res) => {
+  try {
+    const { level, domain, projectName, answers } = req.body;
+    if (!Array.isArray(answers) || answers.length === 0) {
+      return res.status(400).json({ error: "No assessment answers provided." });
+    }
+    const structuredReport =
+      level === "country" && domain === "cybersecurity"
+        ? await buildCmmAssessmentReport(openai, answers, projectName || null)
+        : await buildGenericAssessmentReport(openai, level, domain, projectName || null, answers);
+
+    if (!structuredReport) {
+      return res.status(502).json({ error: "Could not generate the assessment report." });
+    }
+    res.json({
+      reportHtml: formatMarkdownToHTML(renderCmmReportMarkdown(structuredReport)),
+      structuredReport,
+    });
+  } catch (err) {
+    console.error("Assessment report error:", err.message);
     res.status(500).json({ error: "Could not generate the assessment report. Please try again." });
   }
 });

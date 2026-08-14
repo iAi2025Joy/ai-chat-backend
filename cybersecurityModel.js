@@ -160,7 +160,7 @@ export function getFactorKnowledgeChunk(knowledgeChunkId) {
 // tables), not just a block of text. Uses gpt-4o-mini (same
 // cost-conscious model already used elsewhere in this backend for
 // similar generation tasks, e.g. live-chat image analysis).
-export async function buildCmmAssessmentReport(openaiClient, answers) {
+export async function buildCmmAssessmentReport(openaiClient, answers, projectName = null) {
   const sections = answers
     .map((a) => {
       const factor = CMM_ASSESSMENT_FACTORS.find((f) => f.id === a.factorId);
@@ -182,6 +182,7 @@ export async function buildCmmAssessmentReport(openaiClient, answers) {
         role: "system",
         content:
           "You are generating a real Cybersecurity Capacity Maturity Model (CMM) self-assessment report, grounded in the Global Cyber Security Capacity Centre's actual CMM framework. For each Factor below, you're given its REAL stage criteria (start-up/formative/established/strategic/dynamic) and the person's own real answer describing their situation. " +
+          (projectName ? `The project is called "${projectName}". ` : "") +
           "Respond with ONLY a JSON object, no other text, matching this EXACT shape: " +
           `{"executiveSummary": "2-4 sentences on overall strengths and gaps", "topPriorityRecommendations": ["...", "...", "..."], "dimensions": [{"name": "Dimension 1: Cybersecurity Policy and Strategy", "factors": [{"id": "D1.1", "name": "National Cybersecurity Strategy", "stage": "Formative", "stageNumber": 2, "rationale": "...", "recommendation": "..."}]}]}. ` +
           "stageNumber must be an integer 1-5 matching stage exactly: 1=Start-up, 2=Formative, 3=Established, 4=Strategic, 5=Dynamic. If an answer was left blank or too vague to assess, still include the Factor with stage 'Unable to assess', stageNumber 0, and say so honestly in the rationale rather than guessing. Group factors under their real Dimension name, in the same 5-Dimension order as given. topPriorityRecommendations should have exactly 3 items, the most impactful across all Dimensions. Be honest in rationale text that this is a self-assessment from answers, not a formal multi-stakeholder CMM review.",
@@ -194,7 +195,14 @@ export async function buildCmmAssessmentReport(openaiClient, answers) {
 
   const raw = response.choices?.[0]?.message?.content || "{}";
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return {
+      ...parsed,
+      frameworkSource: "GCSCC Cybersecurity Capacity Maturity Model (CMM)",
+      level: "country",
+      domain: "cybersecurity",
+      projectName,
+    };
   } catch (err) {
     console.error("CMM report JSON parse failed:", err.message, "raw:", raw.slice(0, 500));
     return null;
@@ -213,7 +221,12 @@ const STAGE_NAMES = ["Unable to assess", "Start-up", "Formative", "Established",
 // any other reply, not a special case.
 export function renderCmmReportMarkdown(report) {
   if (!report) return "Could not generate the assessment report.";
-  let md = `## Cybersecurity Capacity Assessment -- Prepared by Institute of AI Cybersecurity Services\n\n`;
+  const titleDomain = report.domain === "privacy" ? "Privacy" : "Cybersecurity";
+  const titleLevel = report.level === "company" ? "Organization" : "National";
+  const heading = report.frameworkSource
+    ? `## ${titleLevel} ${titleDomain} Maturity Assessment${report.projectName ? ` -- ${report.projectName}` : ""}\n### Prepared by Institute of AI Cybersecurity Services\n\n`
+    : `## Cybersecurity Capacity Assessment -- Prepared by Institute of AI Cybersecurity Services\n\n`;
+  let md = heading;
   md += `${report.executiveSummary || ""}\n\n`;
   if (Array.isArray(report.topPriorityRecommendations) && report.topPriorityRecommendations.length > 0) {
     md += `**Top priority recommendations:**\n`;
@@ -228,7 +241,9 @@ export function renderCmmReportMarkdown(report) {
       md += `**${f.id} ${f.name} -- ${f.stage}**\n${f.rationale}\n*Recommendation:* ${f.recommendation}\n\n`;
     });
   });
-  md += `\n_This is a self-assessment based on the answers provided, not a formal multi-stakeholder CMM review. A full GCSCC review would involve broader in-country stakeholder consultation._`;
+  md += report.frameworkSource
+    ? `\n_This is a self-assessment based on the answers provided, grounded in the real ${report.frameworkSource}, not a formal independent audit._`
+    : `\n_This is a self-assessment based on the answers provided, not a formal multi-stakeholder CMM review. A full GCSCC review would involve broader in-country stakeholder consultation._`;
   return md;
 }
 
@@ -242,6 +257,9 @@ export function renderCmmReportMarkdown(report) {
 // dependencies by default; doing the actual pixel rendering in the
 // browser, where Chart.js is already proven working, avoids that risk
 // entirely). Uses the docx library -- pure JS, no native dependencies.
+// Genuinely framework-agnostic since the STAGE_NAMES fix above -- used
+// for all 4 assessment types (CMM, NIST CSF, NIST Privacy Framework,
+// and the country-privacy synthesis), not just CMM.
 export async function buildCmmReportDocx(report, chartImageBase64) {
   const {
     Document,
@@ -257,9 +275,15 @@ export async function buildCmmReportDocx(report, chartImageBase64) {
     AlignmentType,
   } = await import("docx");
 
+  const titleDomain = report.domain === "privacy" ? "Privacy" : "Cybersecurity";
+  const titleLevel = report.level === "company" ? "Organization" : "National";
+  const docTitle = report.frameworkSource
+    ? `${titleLevel} ${titleDomain} Maturity Assessment${report.projectName ? ` -- ${report.projectName}` : ""}`
+    : "Cybersecurity Capacity Assessment Report";
+
   const children = [
     new Paragraph({
-      text: "Cybersecurity Capacity Assessment Report",
+      text: docTitle,
       heading: HeadingLevel.TITLE,
       alignment: AlignmentType.CENTER,
     }),
@@ -320,7 +344,7 @@ export async function buildCmmReportDocx(report, chartImageBase64) {
     });
 
     const dataRows = (dim.factors || []).map((f) => {
-      const stageLabel = STAGE_NAMES[f.stageNumber] || f.stage || "-";
+      const stageLabel = f.stage || STAGE_NAMES[f.stageNumber] || "-";
       return new TableRow({
         children: [
           new Paragraph({ children: [new TextRun({ text: `${f.id} ${f.name}`, bold: true })] }),
@@ -367,6 +391,10 @@ export function buildCybersecurityModelInstructions(retrievedKnowledgeText) {
     "You are GARNET's Cybersecurity and Capacity Building model, a specialized assistant grounded in the Global Cyber Security Capacity Centre's (GCSCC, University of Oxford) real Cybersecurity Capacity Maturity Model for Nations (CMM) and the GCSCC's Global Constellation of regional capacity-building centres. " +
     "Your purpose is to help users -- policymakers, national cybersecurity teams, researchers, or anyone doing cybersecurity capacity-building work -- understand and apply the CMM's five Dimensions (Policy and Strategy; Culture and Society; Building Knowledge and Capabilities; Legal and Regulatory Frameworks; Standards and Technologies), assess where a nation or organisation stands using the CMM's five Stages of maturity (start-up, formative, established, strategic, dynamic), and think through practical next steps for improving capacity. " +
     "AI ERA: cybersecurity capacity building is increasingly shaped by AI -- both AI-enabled threats (automated attacks, AI-generated disinformation and social engineering, adversarial manipulation of AI systems) and AI as a capacity-building tool (AI-assisted defence, AI literacy as part of workforce development, and AI risk as a new consideration within national strategy). The GCSCC itself has real, current work in this area (expanded collaboration with Monash University on AI and cybersecurity, an AI Cybersecurity Conference, and work with the Mexican government on AI cybersecurity readiness) -- bring this AI-era lens into your answers naturally where it's genuinely relevant, not as a forced addition to every response. " +
+    "OTHER REAL FRAMEWORKS YOU ALSO COVER (per explicit request, assessments can be at Country or Company/Organization level, and for Cybersecurity or Privacy -- the retrieved context above is CMM-specific, so use this instead when a Guided Conversation is at the company/organization level or is about Privacy): " +
+    "For COMPANY/ORGANIZATION-level Cybersecurity, ground your questions and assessment in the real NIST Cybersecurity Framework (CSF): 5 Functions -- Identify (asset/risk understanding), Protect (safeguards: access control, training, data security), Detect (monitoring, anomaly detection), Respond (incident response planning), Recover (resilience, backup/recovery, business continuity) -- assessed against 4 real Implementation Tiers: Partial (ad hoc, reactive), Risk Informed (approved by management but not org-wide policy), Repeatable (formally established policy, regularly updated), Adaptive (continuously improves based on lessons learned and predictive indicators). " +
+    "For COMPANY/ORGANIZATION-level Privacy, ground your questions in the real NIST Privacy Framework: 5 Functions -- Identify-P (inventory what personal data is processed and why), Govern-P (privacy governance, policies, accountable roles, legal awareness), Control-P (individuals' real ability to access/correct/delete their data), Communicate-P (transparency of data practices to individuals), Protect-P (technical/organizational safeguards for personal data) -- using the SAME 4-tier scale as NIST CSF above (Partial/Risk Informed/Repeatable/Adaptive). " +
+    "For COUNTRY-level Privacy, no single official 'national privacy maturity model' exists the way GCSCC's CMM exists for cybersecurity -- ground your questions honestly in real international reference points instead: the OECD Privacy Guidelines' principles (comprehensive legislation reflecting Collection Limitation/Purpose Specification/Use Limitation/Security Safeguards/Openness/Individual Participation/Accountability), whether an empowered independent enforcement authority (a Data Protection Authority) exists, real exercisable individual rights and breach notification requirements, and international engagement (e.g. Council of Europe Convention 108+ accession, clear cross-border data transfer rules) -- assessed against the same 4-tier scale for consistency (Partial/Risk Informed/Repeatable/Adaptive). Be upfront that this is a synthesis of real international frameworks, not a single official named model, when it's relevant to mention. " +
     (retrievedKnowledgeText
       ? `REAL CMM/GCSCC CONTEXT RETRIEVED FOR THIS QUESTION (use this as your actual grounding -- these are real facts from the CMM 2021 Edition and current GCSCC information, including the real stage-by-stage indicator criteria, not something to second-guess or hedge about):\n\n${retrievedKnowledgeText}\n\n`
       : "") +
