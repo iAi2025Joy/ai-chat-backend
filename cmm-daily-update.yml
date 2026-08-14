@@ -1,0 +1,58 @@
+name: Daily CMM Knowledge Update
+
+# Runs scripts/dailyCmmUpdate.mjs on a schedule -- Render's web service
+# has no built-in scheduler, so this is the actual "cron job" for this
+# feature, matching the same pattern already used for the Android app's
+# build pipeline in this project. Commits any real changes directly to
+# this repo; Render's existing auto-deploy-on-push then redeploys with
+# the updated knowledge base automatically, same as any other commit --
+# no separate deploy step needed here.
+on:
+  schedule:
+    # 06:00 UTC daily. GitHub's scheduled workflows can run a few
+    # minutes late during high-load periods -- expected/normal behavior
+    # for GitHub Actions schedules generally, not specific to this job.
+    - cron: "0 6 * * *"
+  # Lets you trigger a run manually from the Actions tab any time,
+  # without waiting for the schedule -- useful for testing this after
+  # first setting it up, or re-running on demand.
+  workflow_dispatch: {}
+
+jobs:
+  update-knowledge-base:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to commit the updated knowledge base file back to this repo
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run daily CMM knowledge update
+        env:
+          # Must be added as a real repo secret (Settings -> Secrets and
+          # variables -> Actions -> New repository secret) named exactly
+          # OPENAI_API_KEY -- a SEPARATE secret from anything configured
+          # on Render itself, since GitHub Actions and Render are
+          # different platforms with their own separate secret stores.
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: node scripts/dailyCmmUpdate.mjs
+
+      - name: Commit and push if the knowledge base changed
+        run: |
+          git config user.name "GARNET Daily CMM Update"
+          git config user.email "actions@github.com"
+          if git diff --quiet -- cybersecurityKnowledgeBase.js; then
+            echo "No changes to commit today."
+          else
+            git add cybersecurityKnowledgeBase.js
+            git commit -m "Daily CMM knowledge update ($(date -u +%Y-%m-%d))"
+            git push
+          fi
