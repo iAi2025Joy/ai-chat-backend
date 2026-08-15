@@ -241,7 +241,58 @@ export const CYBERSECURITY_CORE_KNOWLEDGE_CHUNKS = [
 // into the hand-curated foundational content above) for the same
 // organizational/safety reasons as CYBERSECURITY_DAILY_UPDATE_CHUNKS.
 // ------------------------------------------------------------------
-export const PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS = [];
+export const PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS = [
+  {
+    "id": "privacy-weekly-2026-08-15-1",
+    "title": "[2026-08-15] [United States] [United States] New Design Code in New Jersey",
+    "text": "New Jersey has introduced a new design code aimed at enhancing privacy protections for residents online. This code will require websites and applications to prioritize user privacy in their design and functionality, marking a step forward in state-level data protection efforts. (Source: Future of Privacy Forum, https://fpf.org/blog/a-new-design-code-takes-root-in-the-garden-state/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-2",
+    "title": "[2026-08-15] [European Union] [European Union] CADA: An (E)U-turn on AI regulation",
+    "text": "The blog discusses the implications of the recently proposed CADA regulation in the EU, which aims to reshape the landscape of AI regulation. It highlights key aspects of the proposal and its potential impact on current policies and governance around AI across member states. (Source: Future of Privacy Forum, https://fpf.org/blog/cada-an-eu-turn-on-ai-regulation/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-3",
+    "title": "[2026-08-15] [Global] Risk Assessment Framework and Best Practices for AI in Hiring Released",
+    "text": "The Future of Privacy Forum (FPF) alongside leading companies has released a risk assessment framework and updated best practices aimed at guiding the responsible use of AI in hiring and employment. This initiative seeks to address concerns related to privacy and bias in AI applications within the labor market. (Source: Future of Privacy Forum, https://fpf.org/press-releases/fpf-and-leading-companies-release-risk-assessment-framework-and-updated-best-practices-for-ai-in-hiring-employment/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-4",
+    "title": "[2026-08-15] [EU] The AI Act Implementation Timeline: What Changes Under the AI Omnibus?",
+    "text": "The blog discusses the implementation timeline for the AI Act in the European Union and the changes introduced by the AI Omnibus. It details key milestones and adjustments in the regulatory framework designed to ensure accountability and ethical governance in AI. (Source: Future of Privacy Forum, https://fpf.org/blog/the-ai-act-implementation-timeline-what-changes-under-the-ai-omnibus/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-5",
+    "title": "[2026-08-15] [United States] [United States] FPF Submits Comments on Colorado Automated Decision-Making Regulation",
+    "text": "The Future of Privacy Forum has submitted comments to inform the rulemaking processes for automated decision-making technology and chatbots in Colorado. These comments aim to influence the development of regulations that govern the use of such technologies. (Source: Future of Privacy Forum, https://fpf.org/blog/fpf-submits-comments-to-inform-colorado-automated-decision-making-technology-and-chatbot-rulemaking-processes/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-6",
+    "title": "[2026-08-15] [United States] [United States] FPF Releases New Issue Brief on U.S. 'Data Broker' Regulatory Landscape",
+    "text": "The Future of Privacy Forum has released a new issue brief examining the regulatory landscape for data brokers in the U.S. This brief outlines the current state of regulations, potential reforms, and the implications for data privacy. (Source: Future of Privacy Forum, https://fpf.org/blog/fpf-releases-new-issue-brief-on-u-s-data-broker-regulatory-landscape/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-7",
+    "title": "[2026-08-15] [European Union] [European Union] The EU AI Act – Enforcement Timeline",
+    "text": "The article discusses the enforcement timeline of the EU AI Act, detailing when the regulations will take effect and what implications this will have for AI governance in the EU. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/07/the-eu-ai-act-when-does-it-become-enforceable-now/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-8",
+    "title": "[2026-08-15] [United States] [United States] Rhode Island’s New AI and Healthcare Privacy Law",
+    "text": "Rhode Island has enacted a new law addressing the intersection of artificial intelligence and healthcare privacy. This legislation aims to enhance patient privacy rights and regulate how AI technologies are utilized in the healthcare sector. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/07/rhode-islands-new-ai-and-healthcare-privacy-law/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-9",
+    "title": "[2026-08-15] [Spain] [Spain] Record €18m Fine for Amadeus from Spanish Data Protection Agency",
+    "text": "The Spanish Data Protection Agency has imposed a record €18 million fine on the IT service provider Amadeus for violations of GDPR related to the reuse of traveler data without obtaining proper consent. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/06/record-e18m-fine-for-amadeus-from-spanish-data-protection-agency-for-gdpr-violations-related-to-use-of-traveller-data-without-consent/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-10",
+    "title": "[2026-08-15] [EU] Is my use case a high-risk AI system? Applying the Commission’s guidelines and next steps",
+    "text": "This article discusses the European Commission's guidelines on identifying high-risk AI systems. It highlights the implications for businesses and outlines the necessary steps for compliance with AI regulations. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/05/is-my-use-case-a-high-risk-ai-system-applying-the-commissions-guidelines-and-next-steps/)"
+  }
+];
 
 // ------------------------------------------------------------------
 // DAILY AUTO-UPDATE SECTION -- per explicit request, this array is
