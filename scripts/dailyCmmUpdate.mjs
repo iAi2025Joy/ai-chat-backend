@@ -42,14 +42,37 @@
 // update, which is normal and expected for any such integration, not a
 // sign anything is broken.
 const CURATED_SOURCES = [
-  { name: "GCSCC (Oxford)", url: "https://gcscc.ox.ac.uk/news?format=rss" },
+  // FIXED this session: the previous ?format=rss guess assumed
+  // Squarespace and was wrong -- a real fetch confirmed the site
+  // returns full HTML at that URL, not RSS. Live inspection confirms
+  // this is actually a Drupal 7 site, whose real core RSS convention
+  // is /rss.xml. NOTE: Drupal 7's default /rss.xml only includes
+  // content promoted to the front page, so this may still come back
+  // thin/empty for the News section specifically -- if so, that's the
+  // next real clue (means News isn't promoted, or needs an actual
+  // Views-based feed display), not a sign this fix was wrong.
+  { name: "GCSCC (Oxford)", url: "https://gcscc.ox.ac.uk/rss.xml" },
   // Confirmed real via ENISA's own official RSS listing page
   // (enisa.europa.eu/rss-feeds) -- the original guess had the wrong
   // path structure entirely.
   { name: "ENISA (EU Cybersecurity Agency)", url: "https://www.enisa.europa.eu/media/news-items/news-wires/RSS" },
+  // NOT swapped: a real fetch this session confirmed the ORIGINAL URL
+  // is correct and returns well-formed RSS -- it's just a genuinely
+  // empty <channel> (0 <item> elements) on NIST's end right now. This
+  // was never a wrong-URL or parsing bug. Left as-is; if it keeps
+  // returning empty for weeks, that's real signal this specific topic
+  // feed isn't being populated, and the more general NIST news feed
+  // (nist.gov/news-events/news/rss.xml -- unverified, found via search
+  // only, not yet fetched live) would be the fallback to try.
   { name: "NIST Cybersecurity", url: "https://www.nist.gov/news-events/cybersecurity/rss.xml" },
   { name: "CISA (US)", url: "https://www.cisa.gov/cybersecurity-advisories/all.xml" },
-  { name: "GFCE (Global Forum on Cyber Expertise)", url: "https://thegfce.org/feed/" },
+  // FIXED this session: root-domain /feed/ only includes WordPress's
+  // default "post" type. Live inspection confirms the site's own nav
+  // puts News at /news/, and a real fetch of an old /news-region/...
+  // path came back as a suspended/broken legacy URL -- the site has
+  // clearly been restructured since the original guess. /news/feed/
+  // is the more likely real endpoint for actual news items now.
+  { name: "GFCE (Global Forum on Cyber Expertise)", url: "https://thegfce.org/news/feed/" },
   // World Economic Forum, OECD Digital Security, and Council of
   // Europe were all removed here -- confirmed via real runs to return
   // a consistent HTTP 403 (not a wrong-URL 404), the same deliberate
@@ -65,16 +88,17 @@ const CURATED_SOURCES = [
   // site before that was fixed to use their real westin.iapp.org
   // subdomain in the weekly script).
   { name: "OECD Digital Security", url: "https://www.oecd.org/digital/rss.xml" },
-  // Per explicit request: keeps GARNET aware of real, individual
-  // country CMM review reports as they're published, not just general
-  // cybersecurity news. Cybil Portal is a real, confirmed public
-  // aggregator specifically of actual CMM country review reports
-  // (Brazil, Nauru, Tunisia, Mongolia, Kuwait, etc. -- GCSCC's own site
-  // confirms 20+ published country reports exist). WordPress sites
-  // (which Cybil Portal is) commonly expose /feed/ as a standard RSS
-  // endpoint -- verify/adjust in the Action's logs if this specific
-  // URL doesn't resolve, same as any other source here.
-  { name: "Cybil Portal -- CMM Country Reports", url: "https://cybilportal.org/publications/portal-of-cybersecurity-capacity-maturity-model-cmm-review-reports/feed/" },
+  // REMOVED (not just re-guessed) this session, per real diagnosis:
+  // the target page is a SINGLE WordPress post/page (a curated
+  // landing page listing country reports), not a category/tag
+  // archive. Appending /feed/ to a singular WP post returns that
+  // post's near-always-empty COMMENTS feed, not a feed of the reports
+  // it links to -- confirmed by inspecting the actual page structure.
+  // No feed URL exists that fixes this; it's not an RSS-shaped source.
+  // Real per-country CMM reports still matter per the original
+  // request -- worth a follow-up session to build a small dedicated
+  // scraper against this specific page's list of report links instead
+  // of treating it as RSS, rather than another feed-URL guess here.
 ];
 
 // Keeps the daily-update section from growing unbounded over time --
