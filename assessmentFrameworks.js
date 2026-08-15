@@ -31,6 +31,8 @@
 //   synthesis of these real sources, not as if it were a single
 //   official named model.
 
+import { buildStructuredFields } from "./assessmentFieldTypes.js";
+
 export const ASSESSMENT_LEVELS = {
   country: "Country",
   company: "Company/Organization",
@@ -273,18 +275,29 @@ const COUNTRY_PRIVACY_AREAS = [
 // combination, in a consistent shape regardless of which underlying
 // real framework it's drawn from.
 export function getAssessmentQuestions(level, domain) {
+  // Per explicit request: every returned factor also carries a real
+  // "fields" array (dropdown + checkboxes + short text + long text +
+  // file upload -- see assessmentFieldTypes.js) so the Structured Form
+  // can render genuinely detailed, varied-input questions instead of a
+  // single open textarea. stageOptions is computed once per call and
+  // passed in so the maturity dropdown always matches this
+  // level+domain's real scale (CMM's 5-stage vs the shared NIST-style
+  // 4-tier scale).
+  const stageOptions = getStageNamesFor(level, domain);
   if (level === "company" && domain === "cybersecurity") {
-    return NIST_CSF_FUNCTIONS.map((f) => ({ ...f, source: "NIST Cybersecurity Framework (CSF)" }));
+    return NIST_CSF_FUNCTIONS.map((f) => ({ ...f, source: "NIST Cybersecurity Framework (CSF)", fields: buildStructuredFields(f, stageOptions) }));
   }
   if (level === "company" && domain === "privacy") {
-    return NIST_PRIVACY_FUNCTIONS.map((f) => ({ ...f, source: "NIST Privacy Framework" }));
+    return NIST_PRIVACY_FUNCTIONS.map((f) => ({ ...f, source: "NIST Privacy Framework", fields: buildStructuredFields(f, stageOptions) }));
   }
   if (level === "country" && domain === "privacy") {
-    return COUNTRY_PRIVACY_AREAS.map((f) => ({ ...f, source: "OECD Privacy Guidelines / UNCTAD Global Cyberlaw Tracker / Council of Europe Convention 108+" }));
+    return COUNTRY_PRIVACY_AREAS.map((f) => ({ ...f, source: "OECD Privacy Guidelines / UNCTAD Global Cyberlaw Tracker / Council of Europe Convention 108+", fields: buildStructuredFields(f, stageOptions) }));
   }
   // country + cybersecurity: handled by the existing, already-built
   // CMM_ASSESSMENT_FACTORS in cybersecurityModel.js -- not duplicated
-  // here, callers should use that directly for this combination.
+  // here, callers should use that directly for this combination (see
+  // buildStructuredFields(factor, CMM_STAGE_NAMES) applied to those in
+  // server.js).
   return null;
 }
 

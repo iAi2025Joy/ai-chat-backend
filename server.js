@@ -69,7 +69,8 @@ import {
   renderCmmReportMarkdown,
   buildCmmReportDocx,
 } from "./cybersecurityModel.js";
-import { getAssessmentQuestions, getFrameworkSourceName } from "./assessmentFrameworks.js";
+import { getAssessmentQuestions, getFrameworkSourceName, CMM_STAGE_NAMES } from "./assessmentFrameworks.js";
+import { buildStructuredFields } from "./assessmentFieldTypes.js";
 import { buildGenericAssessmentReport } from "./assessmentReportGenerator.js";
 
 const app = express();
@@ -1205,8 +1206,11 @@ app.post("/analyze-image-for-live-chat", rateLimitChat, async (req, res) => {
 app.get("/cmm-assessment-factors", (req, res) => {
   // Lets the frontend build the actual form fields from the real
   // Factor list/questions, rather than duplicating that data in two
-  // places that could drift out of sync.
-  res.json({ factors: CMM_ASSESSMENT_FACTORS });
+  // places that could drift out of sync. Kept in sync with the same
+  // structured "fields" (dropdown/checkboxes/text/textarea/file) the
+  // main /assessment-questions route below now returns, in case
+  // anything still calls this older route directly.
+  res.json({ factors: CMM_ASSESSMENT_FACTORS.map((f) => ({ ...f, fields: buildStructuredFields(f, CMM_STAGE_NAMES) })) });
 });
 
 app.post("/cmm-assessment-report", rateLimitChat, async (req, res) => {
@@ -1247,17 +1251,27 @@ app.post("/cmm-assessment-report", rateLimitChat, async (req, res) => {
 app.get("/assessment-questions", (req, res) => {
   const { level, domain } = req.query;
   if (level === "country" && domain === "cybersecurity") {
-    return res.json({ factors: CMM_ASSESSMENT_FACTORS });
+    // Per explicit request: CMM factors also get the real structured
+    // fields (dropdown/checkboxes/text/textarea/file) computed here,
+    // same as the other 3 combinations below -- CMM_ASSESSMENT_FACTORS
+    // itself stays untouched in cybersecurityModel.js so
+    // buildCmmAssessmentReport's existing lookups by factorId keep
+    // working unchanged.
+    return res.json({
+      factors: CMM_ASSESSMENT_FACTORS.map((f) => ({ ...f, fields: buildStructuredFields(f, CMM_STAGE_NAMES) })),
+    });
   }
   const questions = getAssessmentQuestions(level, domain);
   if (!questions) {
     return res.status(400).json({ error: "Unknown level/domain combination." });
   }
-  // Normalized to the SAME {id, dimension, name, question} shape the
-  // frontend already knows how to render, regardless of which real
-  // underlying framework these came from -- "dimension" here is just
-  // the framework's own name, since NIST CSF/Privacy Framework and the
+  // Normalized to the SAME {id, dimension, name, question, fields}
+  // shape the frontend renders, regardless of which real underlying
+  // framework these came from -- "dimension" here is just the
+  // framework's own name, since NIST CSF/Privacy Framework and the
   // country-privacy synthesis are flat (no CMM-style sub-grouping).
+  // "fields" (dropdown/checkboxes/text/textarea/file) was already
+  // computed per-question inside getAssessmentQuestions above.
   const frameworkSource = getFrameworkSourceName(level, domain);
   res.json({
     factors: questions.map((q) => ({
@@ -1265,6 +1279,7 @@ app.get("/assessment-questions", (req, res) => {
       dimension: frameworkSource,
       name: q.name,
       question: q.question,
+      fields: q.fields,
     })),
   });
 });
