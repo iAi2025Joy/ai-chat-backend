@@ -43,15 +43,28 @@
 // sign anything is broken.
 const CURATED_SOURCES = [
   { name: "GCSCC (Oxford)", url: "https://gcscc.ox.ac.uk/news?format=rss" },
-  { name: "ENISA (EU Cybersecurity Agency)", url: "https://www.enisa.europa.eu/media/news-items/news-rss" },
+  // Confirmed real via ENISA's own official RSS listing page
+  // (enisa.europa.eu/rss-feeds) -- the original guess had the wrong
+  // path structure entirely.
+  { name: "ENISA (EU Cybersecurity Agency)", url: "https://www.enisa.europa.eu/media/news-items/news-wires/RSS" },
   { name: "NIST Cybersecurity", url: "https://www.nist.gov/news-events/cybersecurity/rss.xml" },
   { name: "CISA (US)", url: "https://www.cisa.gov/cybersecurity-advisories/all.xml" },
   { name: "GFCE (Global Forum on Cyber Expertise)", url: "https://thegfce.org/feed/" },
-  { name: "World Economic Forum -- Cybersecurity", url: "https://www.weforum.org/agenda/cybersecurity/feed" },
-  { name: "SANS Institute", url: "https://www.sans.org/rss/newsletters/newsbites.xml" },
-  { name: "ISACA", url: "https://www.isaca.org/rssfeeds/isaca-now-blog" },
+  // World Economic Forum, OECD Digital Security, and Council of
+  // Europe were all removed here -- confirmed via real runs to return
+  // a consistent HTTP 403 (not a wrong-URL 404), the same deliberate
+  // bot-blocking pattern already confirmed with DLA Piper in the
+  // weekly script. Not a fixable URL/config issue from our end.
+  // Confirmed real via a SANS Internet Storm Center feeds page --
+  // the original www.sans.org/rss/... guess was never a real path;
+  // SANS's actual RSS content lives on the isc.sans.edu subdomain.
+  { name: "SANS Internet Storm Center", url: "https://isc.sans.edu/rssfeed.xml" },
+  // ISACA removed -- real research found no confirmed native RSS feed
+  // for their site (their news/blog pages appear to be a JS-rendered
+  // app without a real syndication endpoint, similar to IAPP's main
+  // site before that was fixed to use their real westin.iapp.org
+  // subdomain in the weekly script).
   { name: "OECD Digital Security", url: "https://www.oecd.org/digital/rss.xml" },
-  { name: "Council of Europe -- Cybercrime/Octopus", url: "https://www.coe.int/en/web/cybercrime/rss" },
   // Per explicit request: keeps GARNET aware of real, individual
   // country CMM review reports as they're published, not just general
   // cybersecurity news. Cybil Portal is a real, confirmed public
