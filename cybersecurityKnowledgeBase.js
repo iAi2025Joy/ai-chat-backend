@@ -244,6 +244,56 @@ export const CYBERSECURITY_CORE_KNOWLEDGE_CHUNKS = [
 export const PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS = [
   {
     "id": "privacy-weekly-2026-08-15-1",
+    "title": "[2026-08-15] [United States] [United States] A New Design Code Takes Root in the Garden State",
+    "text": "The Future of Privacy Forum discusses the establishment of a new design code in New Jersey aimed at enhancing privacy protections and promoting responsible data practices. This initiative reflects growing attention to data protection and privacy regulations within the state. (Source: Future of Privacy Forum, https://fpf.org/blog/a-new-design-code-takes-root-in-the-garden-state/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-2",
+    "title": "[2026-08-15] [European Union] [European Union] CADA: An (E)U-turn on AI regulation",
+    "text": "The article discusses the proposed changes in AI regulation under the CADA framework in the European Union. It reflects on the evolving landscape of AI governance and the implications for organizations operating within the EU. (Source: Future of Privacy Forum, https://fpf.org/blog/cada-an-eu-turn-on-ai-regulation/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-3",
+    "title": "[2026-08-15] [Global] FPF and Leading Companies Release Risk Assessment Framework and Updated Best Practices for AI in Hiring & Employment",
+    "text": "The Future of Privacy Forum (FPF), along with several leading companies, has released a risk assessment framework and updated best practices focused on the use of AI in hiring and employment. This initiative aims to promote ethical AI practices and mitigate potential risks associated with automated hiring processes. (Source: Future of Privacy Forum, https://fpf.org/press-releases/fpf-and-leading-companies-release-risk-assessment-framework-and-updated-best-practices-for-ai-in-hiring-employment/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-4",
+    "title": "[2026-08-15] The AI Act Implementation Timeline: What Changes Under the AI Omnibus?",
+    "text": "This article discusses the implementation timeline of the AI Act and the modifications introduced by the AI Omnibus. It outlines key changes and their implications for AI governance and regulation. (Source: Future of Privacy Forum, https://fpf.org/blog/the-ai-act-implementation-timeline-what-changes-under-the-ai-omnibus/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-5",
+    "title": "[2026-08-15] [United States] [United States] FPF Submits Comments on Colorado Automated Decision-Making Regulations",
+    "text": "The Future of Privacy Forum has submitted comments to the Colorado rulemaking processes focused on automated decision-making technology and chatbots. This initiative is part of Colorado's efforts to regulate the use of such technologies in line with privacy considerations. (Source: Future of Privacy Forum, https://fpf.org/blog/fpf-submits-comments-to-inform-colorado-automated-decision-making-technology-and-chatbot-rulemaking-processes/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-6",
+    "title": "[2026-08-15] [United States] [United States] FPF Releases New Issue Brief on U.S. 'Data Broker' Regulatory Landscape",
+    "text": "The Future of Privacy Forum (FPF) has published a new issue brief that explores the regulatory landscape surrounding data brokers in the United States. The brief provides insights into the various state and federal efforts to regulate data broker activities and enhance consumer privacy. (Source: Future of Privacy Forum, https://fpf.org/blog/fpf-releases-new-issue-brief-on-u-s-data-broker-regulatory-landscape/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-7",
+    "title": "[2026-08-15] [European Union] [European Union] The EU AI Act – Enforcement Timeline",
+    "text": "The article discusses the enforcement timeline of the EU AI Act, detailing when the regulations will come into effect and the implications for organizations operating within the European Union. It outlines key dates and expectations surrounding compliance with the new AI regulations. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/07/the-eu-ai-act-when-does-it-become-enforceable-now/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-8",
+    "title": "[2026-08-15] [United States] [United States] Rhode Island’s New AI and Healthcare Privacy Law",
+    "text": "Rhode Island has enacted a new law that addresses the intersection of artificial intelligence and healthcare privacy. This law sets forth specific requirements for the use of AI in healthcare settings, emphasizing the protection of patient data and ensuring compliance with existing privacy standards. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/07/rhode-islands-new-ai-and-healthcare-privacy-law/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-9",
+    "title": "[2026-08-15] [Spain] [Spain] Record €18m fine for Amadeus from Spanish Data Protection Agency for GDPR violations",
+    "text": "The Spanish Data Protection Agency has imposed a record €18 million fine on IT service provider Amadeus for violations of GDPR related to the reuse of customer data without consent. This marks a significant enforcement action in the aviation sector concerning data protection regulations. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/06/record-e18m-fine-for-amadeus-from-spanish-data-protection-agency-for-gdpr-violations-related-to-use-of-traveller-data-without-consent/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-10",
+    "title": "[2026-08-15] [EU] Assessing High-Risk AI Systems under Commission Guidelines",
+    "text": "This article discusses the European Commission's guidelines for identifying high-risk AI systems. It provides insights on how organizations can apply these guidelines to evaluate their specific use cases and the next steps in compliance. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/05/is-my-use-case-a-high-risk-ai-system-applying-the-commissions-guidelines-and-next-steps/)"
+  },
+  {
+    "id": "privacy-weekly-2026-08-15-1",
     "title": "[2026-08-15] [United States] [United States] New Design Code in New Jersey",
     "text": "The blog discusses the implementation of a new design code in New Jersey aimed at enhancing data privacy and protection for consumers. This code sets specific requirements for the design of online services to prioritize user privacy. (Source: Future of Privacy Forum, https://fpf.org/blog/a-new-design-code-takes-root-in-the-garden-state/)"
   },
