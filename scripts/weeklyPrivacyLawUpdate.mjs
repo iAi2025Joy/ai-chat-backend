@@ -32,20 +32,24 @@ const CURATED_SOURCES = [
   // end (not a fixable URL/config issue). Real, working feed content
   // was found from it once before the blocking kicked in, but this
   // isn't reliable enough to keep relying on.
-  // A confirmed real cause of "found 0 items" despite no fetch error:
-  // iapp.org's main site is a JavaScript-rendered app that returns an
-  // essentially empty HTML shell to non-browser requests (confirmed
-  // directly -- another IAPP dashboard page returns literally "You
-  // need to enable JavaScript to run this app" when fetched this way).
-  // Their real RSS syndication lives on a SEPARATE subdomain,
-  // westin.iapp.org, not iapp.org itself.
-  { name: "IAPP -- US Privacy News Digest", url: "https://westin.iapp.org/rss/united-states-dashboard-digest/" },
-  // OECD.AI's Wonk blog does not appear to have a real native RSS feed
-  // at all (no confirmed one could be found after real research) --
-  // replaced with a confirmed, verified-working AI news feed instead,
-  // which regularly covers AI governance/regulation developments
-  // (EU AI Act, national AI policy, etc.) alongside general AI news.
-  { name: "AI News (artificialintelligence-news.com)", url: "https://www.artificialintelligence-news.com/feed/rss/" },
+  //
+  // IAPP removed -- the westin.iapp.org subdomain (the real one their
+  // own site historically used for RSS syndication, from when IAPP's
+  // research arm was called the "Westin Research Center") returned a
+  // DNS-level ENOTFOUND on two separate real runs -- the hostname
+  // simply doesn't resolve publicly anymore, meaning it's been
+  // deprecated on IAPP's end, not a URL typo. Their main site
+  // (iapp.org) is a JS-rendered app with no real feed available to a
+  // non-browser client (see the removed comment above for how that was
+  // confirmed).
+  //
+  // AI News (artificialintelligence-news.com) removed -- confirmed via
+  // a real UND_ERR_CONNECT_TIMEOUT (not a rejection) on two separate
+  // real runs, despite this exact URL being directly verified as real
+  // and working from a different network. That specific error pattern
+  // -- a silently dropped connection rather than a clean HTTP
+  // response -- is the signature of deliberate blocking targeted at
+  // cloud/CI IP ranges, not a fixable URL/config issue.
   { name: "Future of Privacy Forum", url: "https://fpf.org/feed/" },
   { name: "Norton Rose Fulbright -- Data Protection Report", url: "https://feeds.feedburner.com/DataProtectionReport" },
 ];
