@@ -270,22 +270,29 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     const { message, mode, timezone: userTimezone, history, images, documents, isVoiceMode, spokenLanguageKey } = req.body;
 
     // Science and Research needs materially stronger visual and
-    // multi-step numeric/geometric reasoning than gpt-4o-mini reliably
-    // provides. Originally scoped to mode === "science" only, but a
-    // confirmed real bug showed this was too narrow: the exact same
-    // kind of image-based math/geometry question also comes through
-    // GENERAL CHAT (people attach a homework photo before ever
-    // switching modes), and a General Chat answer to one such photo
-    // fabricated a given value that was never labeled in the image
-    // (claimed "AD = 2" when no such label exists) and mislabeled
-    // another (called BC's real "4" a "DC = 4" instead) -- gpt-4o-mini
-    // misreading the actual image, same root failure as the original
-    // Science-mode bug, just happening in a different mode. Now
-    // applies whenever an image is actually attached, in ANY mode, not
-    // just Science -- accurately reading what's actually in a photo
-    // matters everywhere, not only in the one mode dedicated to deep
-    // analysis.
-    const chatModel = (mode === "science" || (Array.isArray(images) && images.length > 0)) ? "gpt-4o" : "gpt-4o-mini";
+    // multi-step numeric/geometric reasoning than a standard chat
+    // model reliably provides. Originally bumped to "gpt-4o" earlier
+    // this session, but repeated real tests kept failing in a way that
+    // pointed past just image-reading: it also failed at basic
+    // determinate logic (e.g. not recognizing that a shared vertex
+    // angle is automatically equal in both triangles, something that
+    // needs no image-reading at all) -- a genuine reasoning-depth gap,
+    // not just a perception one. A fresh check (this model's own
+    // training data on OpenAI's lineup was stale) confirmed OpenAI now
+    // has dedicated reasoning models built specifically for "math,
+    // science, planning, and hard multi-step problems" -- exactly this
+    // mode's job -- so this now uses "o3" for Science mode specifically,
+    // not just a stronger chat model. Confirmed safe to swap in this
+    // exact codepath: none of the /chat completions here pass
+    // temperature, max_tokens, or native OpenAI stream:true, which are
+    // the usual sources of reasoning-model incompatibility, so this is
+    // a clean model-string swap with no other code changes needed.
+    // Images elsewhere (any mode, not just Science) still use "gpt-4o"
+    // -- a real improvement over the original "gpt-4o-mini" already,
+    // and proportionate cost/latency for modes that aren't specifically
+    // promising rigorous, fully-analyzed correctness the way Science
+    // and Research explicitly does.
+    const chatModel = mode === "science" ? "o3" : ((Array.isArray(images) && images.length > 0) ? "gpt-4o" : "gpt-4o-mini");
     // images (optional): an ARRAY of base64 data URLs for one or more
     // images the user attached -- passed through as image_url blocks in
     // OpenAI's vision input format further below.
