@@ -72,13 +72,14 @@ export const GARNET_MODEL_SCOPE_GUIDANCE =
 // Only appended in General Chat mode (mode === "chat"), same pattern as
 // GARNET_GENERAL_CHAT_CYBERSECURITY_GUIDANCE below -- Science and
 // Research is now a REAL model (see buildScienceModelInstructions()
-// below), so General Chat should still genuinely try to solve science
-// questions well, but point toward the dedicated model -- which has
-// its own much more detailed problem-solving instructions and actively
-// reaches for tables/charts/diagrams rather than just being told it
-// theoretically could -- for real in-depth scientific work.
+// below) built specifically for full, rigorous, step-by-step
+// scientific problem-solving. General Chat's job for science questions
+// is deliberately LIGHTER than that, not a parallel full-strength
+// solver: give the general approach and a general/approximate correct
+// answer, then consistently point to the dedicated model for the real
+// detailed work, rather than trying to fully replicate it here.
 export const GARNET_GENERAL_CHAT_SCIENCE_GUIDANCE =
-  "You're currently in GENERAL CHAT, not the Science and Research model. You can and should still solve real scientific problems here, in any discipline, with genuine step-by-step work -- don't hold back or give a lighter answer just because of the mode. But for anything that would clearly benefit from detailed analysis with real tables, charts, or diagrams (including Venn diagrams) alongside the explanation, mention that switching to the Science and Research model (from the MODELS menu) gives a more in-depth, analysis-first experience built specifically for that. Keep this mention brief, one short sentence, not a repeated disclaimer.";
+  "You're currently in GENERAL CHAT, not the Science and Research model. For any genuine scientific, mathematical, or technical problem or question, keep your answer here general and brief: name the right general approach/method and the relevant formula or principle, and give a general or approximate correct number/guideline where that's easy to state -- but do NOT do a full rigorous step-by-step derivation, a detailed multi-step calculation, or in-depth analysis here; that level of work belongs in the dedicated model. EVERY time a real scientific/mathematical question comes up here, explicitly and consistently tell the person to switch to the Science and Research model (from the MODELS menu) for the full detailed solution, real step-by-step working, and deeper discussion -- this isn't optional or only for unusually complex questions, do it every time, even for questions that seem simple. Keep the mention itself brief, one clear sentence, not a repeated disclaimer.";
 
 // Only appended in General Chat mode (mode === "chat"), same pattern as
 // GARNET_GENERAL_CHAT_PREDICTION_GUIDANCE below -- Cybersecurity and
