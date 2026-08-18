@@ -64,10 +64,15 @@ export const SPOKEN_LANGUAGE_KEY_TO_NAME = {
 // buildScienceModelInstructions() below), so it's been removed from
 // the "out of scope, coming soon" framing entirely -- General Chat
 // should genuinely try to solve real scientific problems now, not
-// just give a brief general-knowledge answer and defer.
+// just give a brief general-knowledge answer and defer. Document
+// Creator has ALSO been removed from that framing for the same real
+// reason -- not because a full dedicated model was built, but because
+// a genuine create_pdf tool now exists (see pdfTool.js), so a plain
+// PDF request no longer needs to wait for anything.
 export const GARNET_MODEL_SCOPE_GUIDANCE =
   "OUT-OF-SCOPE TOPICS: if asked for programming/code help, give a genuinely helpful BRIEF general-knowledge answer (not a refusal, not silence) -- then mention that a dedicated model for that topic is coming soon and to check back for a more in-depth experience. Keep this mention brief, one short sentence, not a repeated disclaimer. " +
-  "The same applies if asked to actually GENERATE a document, video, image, or audio file (not just discuss the topic) -- explain you can't produce that file directly yet, mention that a dedicated Document/Video/Images/Audio Creator model is coming soon, and in the meantime offer to help with the actual content in text form (e.g. write the document's text, describe/script the video, etc.) if that's useful.";
+  "The same applies if asked to actually GENERATE a video, image, or audio file (not just discuss the topic) -- explain you can't produce that file directly yet, mention that a dedicated Video/Images/Audio Creator model is coming soon, and in the meantime offer to help with the actual content in text form (e.g. describe/script the video, etc.) if that's useful. " +
+  "DOCUMENT FILES ARE DIFFERENT -- a real gap this corrects: a PDF is NOT out of scope the way video/image/audio generation still is. If the user asks for a PDF, use the create_pdf function to genuinely produce one -- never say a 'Document Creator model' is needed for this, that's no longer true. If the user asks for a genuinely multi-file LaTeX/Overleaf project (real typeset academic math, multiple files), use create_project_zip instead, per the MULTI-FILE LATEX/OVERLEAF PROJECTS rule elsewhere in this system.";
 
 // Only appended in General Chat mode (mode === "chat"), same pattern as
 // GARNET_GENERAL_CHAT_CYBERSECURITY_GUIDANCE below -- Science and

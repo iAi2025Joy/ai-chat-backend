@@ -46,6 +46,7 @@ import { transcribeAudio } from "./audioTranscriber.js";
 // safely deleted from the repo; nothing imports it anymore.
 import { getRenderChartToolDefinition, handleRenderChartCall } from "./chartTool.js";
 import { getCreateProjectZipToolDefinition, handleCreateProjectZipCall } from "./projectZipTool.js";
+import { getCreatePdfToolDefinition, handleCreatePdfCall } from "./pdfTool.js";
 import { convertLinksToHTML, formatMarkdownToHTML } from "./textFormatting.js";
 import {
   instituteData,
@@ -432,6 +433,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // Same reasoning, for create_project_zip -- populated inside the
     // tool loop below, appended to the final reply alongside any charts.
     let renderedZipBlocksForResponse = [];
+    let renderedPdfBlocksForResponse = [];
     // Also declared here (not just inside the OpenAI branch below) so the
     // final diagnostic logging near the end of the route can reference it
     // too -- a real scope bug already caught once before with this exact
@@ -676,6 +678,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         getFetchPageToolDefinition(),
         getRenderChartToolDefinition(),
         getCreateProjectZipToolDefinition(),
+        getCreatePdfToolDefinition(),
         getLiveGoldPriceToolDefinition(),
         getGoldPriceHistoryToolDefinition(),
         getOilPredictionToolDefinition(),
@@ -780,6 +783,10 @@ app.post("/chat", rateLimitChat, async (req, res) => {
               const { toolResult: zipToolResult, zipHtml } = handleCreateProjectZipCall(toolCall.function.arguments);
               toolResult = zipToolResult;
               if (zipHtml) renderedZipBlocksForResponse.push(zipHtml);
+            } else if (toolCall.function.name === "create_pdf") {
+              const { toolResult: pdfToolResult, pdfHtml } = handleCreatePdfCall(toolCall.function.arguments);
+              toolResult = pdfToolResult;
+              if (pdfHtml) renderedPdfBlocksForResponse.push(pdfHtml);
             } else if (toolCall.function.name === "get_live_gold_price") {
               toolResult = await handleLiveGoldPriceCall();
             } else if (toolCall.function.name === "get_gold_price_history") {
@@ -1148,6 +1155,11 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     if (renderedZipBlocksForResponse.length > 0) {
       formattedReply += renderedZipBlocksForResponse.join("");
       console.log(`create_project_zip: appended ${renderedZipBlocksForResponse.length} project zip(s) to final response. Final reply length: ${formattedReply.length}`);
+    }
+
+    if (renderedPdfBlocksForResponse.length > 0) {
+      formattedReply += renderedPdfBlocksForResponse.join("");
+      console.log(`create_pdf: appended ${renderedPdfBlocksForResponse.length} PDF(s) to final response. Final reply length: ${formattedReply.length}`);
     }
 
     // Final event -- the frontend (see deliverMessage in index.html)
