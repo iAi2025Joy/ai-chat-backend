@@ -81,6 +81,36 @@ const app = express();
 // status events in the /chat route (see sendEvent there) so the
 // frontend's "thinking" indicator shows what's ACTUALLY running at that
 // exact moment, not a guessed word from a local rotation.
+// A confirmed real complaint this fixes: the very first status shown
+// while GARNET works was one fixed, generic phrase ("Identifying what's
+// needed") no matter which real mode was active or whether an image was
+// attached -- not describing what GARNET was actually about to do. This
+// gives each real mode its own genuine opening phrase, and takes
+// priority when an image is actually attached (regardless of mode),
+// since accurately reading a real attached image is a distinct, real
+// step worth naming specifically -- not folded into a generic "Thinking".
+function getStartStatusLabel(mode, hasImages) {
+  if (hasImages) return "Reading your image closely";
+  if (mode === "science") return "Working through your question";
+  if (mode === "cybersecurity") return "Reviewing your cybersecurity question";
+  return "Identifying what's needed";
+}
+
+// Same real gap, at the other end of a turn: the closing status right
+// before the final answer is written was always a generic pick from
+// FINALIZE_PHASE_WORDS ("Polishing the response", etc.), identical
+// regardless of mode. Science mode specifically has its own real
+// closing step defined in its own instructions (VERIFY YOUR OWN ANSWER
+// BEFORE FINALIZING) -- "Double-checking the answer" describes that
+// real step directly, rather than a generic phrase that happens to also
+// be technically true. Falls back to the existing rotating generic pool
+// for modes without a real distinct closing step of their own.
+function getFinalizeStatusLabel(mode) {
+  if (mode === "science") return "Double-checking the answer";
+  if (mode === "cybersecurity") return "Finalizing the assessment";
+  return pickPhaseWord(FINALIZE_PHASE_WORDS);
+}
+
 const TOOL_STATUS_LABELS = {
   get_gold_prediction: "Checking the gold prediction model",
   get_oil_prediction: "Checking the oil prediction model",
@@ -264,10 +294,23 @@ app.post("/chat", rateLimitChat, async (req, res) => {
   };
 
   try {
-    sendEvent({ status: "Identifying what's needed" });
-    sendEvent({ status: pickPhaseWord(START_PHASE_WORDS) });
-
     const { message, mode, timezone: userTimezone, history, images, documents, isVoiceMode, spokenLanguageKey } = req.body;
+    const hasImages = Array.isArray(images) && images.length > 0;
+
+    // A confirmed real complaint this fixes: the very first two status
+    // events shown while GARNET works were always generic, fixed
+    // phrases ("Identifying what's needed", then a random pick from
+    // START_PHASE_WORDS like "Thinking") -- completely the same
+    // regardless of which real mode was active or whether an image was
+    // even attached. Given the real accuracy work this session went
+    // into actually reading attached images correctly, showing "Reading
+    // your image closely" specifically when one is present is both more
+    // honest about what's actually happening AND more reassuring than a
+    // generic "Thinking". Mode-specific phrasing follows the same idea:
+    // say what THIS mode is actually about to do, not an interchangeable
+    // phrase that would look identical in every other mode too.
+    sendEvent({ status: getStartStatusLabel(mode, hasImages) });
+    sendEvent({ status: pickPhaseWord(START_PHASE_WORDS) });
 
     // Science and Research needs materially stronger visual and
     // multi-step numeric/geometric reasoning than a standard chat
@@ -808,7 +851,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // actually gathered across the rounds above, rather than risk
         // showing the user a blank reply.
         if ((!responseMessage.content || !responseMessage.content.trim()) && toolRound >= MAX_TOOL_ROUNDS) {
-          sendEvent({ status: pickPhaseWord(FINALIZE_PHASE_WORDS) });
+          sendEvent({ status: getFinalizeStatusLabel(mode) });
           aiResponse = await openai.chat.completions.create({ model: chatModel, messages });
           responseMessage = aiResponse.choices[0].message;
         }
@@ -995,7 +1038,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // while still mid-tool-call, force one final answer-only call so
         // content is never left empty.
         if ((!correctionMessage.content || !correctionMessage.content.trim()) && correctionMessage.tool_calls && correctionMessage.tool_calls.length > 0) {
-          sendEvent({ status: pickPhaseWord(FINALIZE_PHASE_WORDS) });
+          sendEvent({ status: getFinalizeStatusLabel(mode) });
           const finalizeResponse = await openai.chat.completions.create({ model: chatModel, messages });
           correctionMessage = finalizeResponse.choices[0].message;
         }
@@ -1042,7 +1085,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
               messages.push({ role: "tool", tool_call_id: toolCall.id, content: chartToolResult });
             }
 
-            sendEvent({ status: pickPhaseWord(FINALIZE_PHASE_WORDS) });
+            sendEvent({ status: getFinalizeStatusLabel(mode) });
             const wrapUpResponse = await openai.chat.completions.create({ model: chatModel, messages });
             correctionMessage = wrapUpResponse.choices[0].message;
           }
