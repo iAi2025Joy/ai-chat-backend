@@ -271,24 +271,21 @@ app.post("/chat", rateLimitChat, async (req, res) => {
 
     // Science and Research needs materially stronger visual and
     // multi-step numeric/geometric reasoning than gpt-4o-mini reliably
-    // provides -- a confirmed real bug this fixes: asked to solve a
-    // real geometry problem from a photo (a triangle with an altitude
-    // to the hypotenuse, given sides 5/3/4), a prior response BOTH
-    // misread the actual given values from the image (inventing a "6"
-    // that appears nowhere in the real problem) AND fabricated an
-    // incorrect similar-triangle justification (a false "vertical
-    // angles" claim that doesn't apply to this configuration at all),
-    // landing on a wrong final numeric answer (3.33, vs. the real
-    // answer of 20/3 ≈ 6.67) stated with full confidence. gpt-4o (the
-    // real, non-mini model) is materially more reliable at both
-    // accurately reading figures and following rigorous multi-step
-    // reasoning without skipping/inventing steps -- worth the extra
-    // cost and latency specifically here, where getting the actual
-    // answer right is the entire point of this model, unlike General
-    // Chat/Prediction/Cybersecurity's more conversational or
-    // lookup-style traffic where gpt-4o-mini remains the right
-    // cost/quality tradeoff.
-    const chatModel = mode === "science" ? "gpt-4o" : "gpt-4o-mini";
+    // provides. Originally scoped to mode === "science" only, but a
+    // confirmed real bug showed this was too narrow: the exact same
+    // kind of image-based math/geometry question also comes through
+    // GENERAL CHAT (people attach a homework photo before ever
+    // switching modes), and a General Chat answer to one such photo
+    // fabricated a given value that was never labeled in the image
+    // (claimed "AD = 2" when no such label exists) and mislabeled
+    // another (called BC's real "4" a "DC = 4" instead) -- gpt-4o-mini
+    // misreading the actual image, same root failure as the original
+    // Science-mode bug, just happening in a different mode. Now
+    // applies whenever an image is actually attached, in ANY mode, not
+    // just Science -- accurately reading what's actually in a photo
+    // matters everywhere, not only in the one mode dedicated to deep
+    // analysis.
+    const chatModel = (mode === "science" || (Array.isArray(images) && images.length > 0)) ? "gpt-4o" : "gpt-4o-mini";
     // images (optional): an ARRAY of base64 data URLs for one or more
     // images the user attached -- passed through as image_url blocks in
     // OpenAI's vision input format further below.
@@ -597,21 +594,15 @@ app.post("/chat", rateLimitChat, async (req, res) => {
                   // image at full "high" detail (multiple high-res
                   // tiles) instead of the "auto" default, which can
                   // silently downsample a busy image before the model
-                  // ever sees it. Confirmed real cause of continued
-                  // wrong answers in Science mode even after the
-                  // gpt-4o model upgrade: a photo with several
-                  // separate problems/figures packed onto one
-                  // textbook page (small, closely-spaced numeric
-                  // labels near different triangles) was still being
-                  // misread at "auto" detail, pulling in a value that
-                  // actually belonged to a neighboring problem's
-                  // figure. High detail costs more per image but is
-                  // worth it specifically here, where reading small
-                  // print correctly is the entire point -- other
-                  // modes keep "auto" since their image use is more
-                  // casual (a described photo, not fine print to
-                  // transcribe exactly).
-                  ...images.map((img) => ({ type: "image_url", image_url: { url: img, detail: mode === "science" ? "high" : "auto" } })),
+                  // ever sees it. Originally scoped to mode ===
+                  // "science" only, but the same General Chat
+                  // image-misreading bug documented above at the
+                  // chatModel definition showed that scoping was too
+                  // narrow -- now applies to every image, in every
+                  // mode, since accurately reading a photo's actual
+                  // content matters regardless of which mode the
+                  // person happened to be in when they attached it.
+                  ...images.map((img) => ({ type: "image_url", image_url: { url: img, detail: "high" } })),
                 ]
               : effectiveMessage,
         },
