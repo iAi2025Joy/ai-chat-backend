@@ -53,7 +53,9 @@ import {
   GARNET_MODEL_SCOPE_GUIDANCE,
   GARNET_GENERAL_CHAT_PREDICTION_GUIDANCE,
   GARNET_GENERAL_CHAT_CYBERSECURITY_GUIDANCE,
+  GARNET_GENERAL_CHAT_SCIENCE_GUIDANCE,
 } from "./instituteInfo.js";
+import { buildScienceModelInstructions } from "./scienceModel.js";
 import {
   detectForcedPredictionTool,
   detectForcedImageSearch,
@@ -546,7 +548,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         },
         {
           role: "system",
-          content: GARNET_MODEL_SCOPE_GUIDANCE + (mode === "chat" ? " " + GARNET_GENERAL_CHAT_PREDICTION_GUIDANCE + " " + GARNET_GENERAL_CHAT_CYBERSECURITY_GUIDANCE : ""),
+          content: GARNET_MODEL_SCOPE_GUIDANCE + (mode === "chat" ? " " + GARNET_GENERAL_CHAT_PREDICTION_GUIDANCE + " " + GARNET_GENERAL_CHAT_CYBERSECURITY_GUIDANCE + " " + GARNET_GENERAL_CHAT_SCIENCE_GUIDANCE : ""),
         },
         // Only added when actually in Cybersecurity mode -- the real,
         // grounded model instructions built from whatever knowledge
@@ -554,6 +556,15 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // cybersecurityModel.js).
         ...(mode === "cybersecurity"
           ? [{ role: "system", content: buildCybersecurityModelInstructions(cybersecurityRetrievedText) }]
+          : []),
+        // Only added when actually in Science and Research mode -- see
+        // scienceModel.js. No retrieval step needed here the way
+        // Cybersecurity has (that's grounded in one specific curated
+        // framework; Science and Research deliberately spans every
+        // discipline, so it leans on the model's own real scientific
+        // knowledge plus rigorous process instructions instead).
+        ...(mode === "science"
+          ? [{ role: "system", content: buildScienceModelInstructions() }]
           : []),
         {
           role: "user",

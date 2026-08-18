@@ -57,17 +57,28 @@ export const SPOKEN_LANGUAGE_KEY_TO_NAME = {
 
 // GARNET now has real, separate "models" the person picks from a menu
 // (Prediction Model, Cybersecurity and Capacity Building, General Chat,
-// and five not-yet-built ones: Science and Research, Code, Document
-// Creator, Video Creator, Images Creator, Audio Creator). This guidance
-// keeps General Chat from overstepping into territory the other real
-// models own, and gives a real, helpful answer for the not-yet-built
-// ones rather than silently attempting a full answer as if they were
-// in scope. Shared between /chat (mode-aware, see below) and Live
-// Chat's Realtime instructions (always included there, since Live Chat
-// is one continuous session without a mode-switching menu of its own).
+// Note: this list originally covered six not-yet-built models --
+// Science and Research, Code, Document Creator, Video Creator, Images
+// Creator, Audio Creator -- but Science and Research is now a REAL
+// model (see GARNET_GENERAL_CHAT_SCIENCE_GUIDANCE and
+// buildScienceModelInstructions() below), so it's been removed from
+// the "out of scope, coming soon" framing entirely -- General Chat
+// should genuinely try to solve real scientific problems now, not
+// just give a brief general-knowledge answer and defer.
 export const GARNET_MODEL_SCOPE_GUIDANCE =
-  "OUT-OF-SCOPE TOPICS: if asked something squarely about science/scientific topics, or asking for programming/code help, give a genuinely helpful BRIEF general-knowledge answer (not a refusal, not silence) -- then mention that a dedicated model for that topic is coming soon and to check back for a more in-depth experience. Keep this mention brief, one short sentence, not a repeated disclaimer. " +
+  "OUT-OF-SCOPE TOPICS: if asked for programming/code help, give a genuinely helpful BRIEF general-knowledge answer (not a refusal, not silence) -- then mention that a dedicated model for that topic is coming soon and to check back for a more in-depth experience. Keep this mention brief, one short sentence, not a repeated disclaimer. " +
   "The same applies if asked to actually GENERATE a document, video, image, or audio file (not just discuss the topic) -- explain you can't produce that file directly yet, mention that a dedicated Document/Video/Images/Audio Creator model is coming soon, and in the meantime offer to help with the actual content in text form (e.g. write the document's text, describe/script the video, etc.) if that's useful.";
+
+// Only appended in General Chat mode (mode === "chat"), same pattern as
+// GARNET_GENERAL_CHAT_CYBERSECURITY_GUIDANCE below -- Science and
+// Research is now a REAL model (see buildScienceModelInstructions()
+// below), so General Chat should still genuinely try to solve science
+// questions well, but point toward the dedicated model -- which has
+// its own much more detailed problem-solving instructions and actively
+// reaches for tables/charts/diagrams rather than just being told it
+// theoretically could -- for real in-depth scientific work.
+export const GARNET_GENERAL_CHAT_SCIENCE_GUIDANCE =
+  "You're currently in GENERAL CHAT, not the Science and Research model. You can and should still solve real scientific problems here, in any discipline, with genuine step-by-step work -- don't hold back or give a lighter answer just because of the mode. But for anything that would clearly benefit from detailed analysis with real tables, charts, or diagrams (including Venn diagrams) alongside the explanation, mention that switching to the Science and Research model (from the MODELS menu) gives a more in-depth, analysis-first experience built specifically for that. Keep this mention brief, one short sentence, not a repeated disclaimer.";
 
 // Only appended in General Chat mode (mode === "chat"), same pattern as
 // GARNET_GENERAL_CHAT_PREDICTION_GUIDANCE below -- Cybersecurity and
