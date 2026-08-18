@@ -593,7 +593,25 @@ app.post("/chat", rateLimitChat, async (req, res) => {
             Array.isArray(images) && images.length > 0
               ? [
                   { type: "text", text: effectiveMessage },
-                  ...images.map((img) => ({ type: "image_url", image_url: { url: img } })),
+                  // Forces OpenAI's vision pipeline to process the
+                  // image at full "high" detail (multiple high-res
+                  // tiles) instead of the "auto" default, which can
+                  // silently downsample a busy image before the model
+                  // ever sees it. Confirmed real cause of continued
+                  // wrong answers in Science mode even after the
+                  // gpt-4o model upgrade: a photo with several
+                  // separate problems/figures packed onto one
+                  // textbook page (small, closely-spaced numeric
+                  // labels near different triangles) was still being
+                  // misread at "auto" detail, pulling in a value that
+                  // actually belonged to a neighboring problem's
+                  // figure. High detail costs more per image but is
+                  // worth it specifically here, where reading small
+                  // print correctly is the entire point -- other
+                  // modes keep "auto" since their image use is more
+                  // casual (a described photo, not fine print to
+                  // transcribe exactly).
+                  ...images.map((img) => ({ type: "image_url", image_url: { url: img, detail: mode === "science" ? "high" : "auto" } })),
                 ]
               : effectiveMessage,
         },
