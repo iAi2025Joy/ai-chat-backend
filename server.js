@@ -268,6 +268,27 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     sendEvent({ status: pickPhaseWord(START_PHASE_WORDS) });
 
     const { message, mode, timezone: userTimezone, history, images, documents, isVoiceMode, spokenLanguageKey } = req.body;
+
+    // Science and Research needs materially stronger visual and
+    // multi-step numeric/geometric reasoning than gpt-4o-mini reliably
+    // provides -- a confirmed real bug this fixes: asked to solve a
+    // real geometry problem from a photo (a triangle with an altitude
+    // to the hypotenuse, given sides 5/3/4), a prior response BOTH
+    // misread the actual given values from the image (inventing a "6"
+    // that appears nowhere in the real problem) AND fabricated an
+    // incorrect similar-triangle justification (a false "vertical
+    // angles" claim that doesn't apply to this configuration at all),
+    // landing on a wrong final numeric answer (3.33, vs. the real
+    // answer of 20/3 ≈ 6.67) stated with full confidence. gpt-4o (the
+    // real, non-mini model) is materially more reliable at both
+    // accurately reading figures and following rigorous multi-step
+    // reasoning without skipping/inventing steps -- worth the extra
+    // cost and latency specifically here, where getting the actual
+    // answer right is the entire point of this model, unlike General
+    // Chat/Prediction/Cybersecurity's more conversational or
+    // lookup-style traffic where gpt-4o-mini remains the right
+    // cost/quality tradeoff.
+    const chatModel = mode === "science" ? "gpt-4o" : "gpt-4o-mini";
     // images (optional): an ARRAY of base64 data URLs for one or more
     // images the user attached -- passed through as image_url blocks in
     // OpenAI's vision input format further below.
@@ -601,7 +622,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
       const forcedToolName = detectForcedPredictionTool(message) || detectForcedImageSearch(message) || detectForcedChartRequest(message) || detectForcedWebSearch(message);
 
       let aiResponse = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: chatModel,
         messages,
         tools,
         ...(forcedToolName
@@ -748,7 +769,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
           const lastToolName = responseMessage.tool_calls[responseMessage.tool_calls.length - 1]?.function?.name;
           sendEvent({ status: TOOL_REVIEW_LABELS[lastToolName] || pickPhaseWord(REVIEW_PHASE_WORDS) });
           aiResponse = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: chatModel,
             messages,
             tools, // kept available every round -- lets the model chain a further tool call (e.g. fetch_web_page after search_web) instead of being cut off after one batch
           });
@@ -763,7 +784,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // showing the user a blank reply.
         if ((!responseMessage.content || !responseMessage.content.trim()) && toolRound >= MAX_TOOL_ROUNDS) {
           sendEvent({ status: pickPhaseWord(FINALIZE_PHASE_WORDS) });
-          aiResponse = await openai.chat.completions.create({ model: "gpt-4o-mini", messages });
+          aiResponse = await openai.chat.completions.create({ model: chatModel, messages });
           responseMessage = aiResponse.choices[0].message;
         }
 
@@ -881,7 +902,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // data yet, rather than being cornered into fabricating chart
         // numbers just to satisfy a hard-forced render_chart call.
         let correctionResponse = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
+          model: chatModel,
           messages,
           tools,
           tool_choice: "required",
@@ -938,7 +959,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
           }
 
           correctionResponse = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: chatModel,
             messages,
             tools, // free choice from here -- don't keep forcing once it's had a real chance to gather data and chart it
           });
@@ -950,7 +971,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // content is never left empty.
         if ((!correctionMessage.content || !correctionMessage.content.trim()) && correctionMessage.tool_calls && correctionMessage.tool_calls.length > 0) {
           sendEvent({ status: pickPhaseWord(FINALIZE_PHASE_WORDS) });
-          const finalizeResponse = await openai.chat.completions.create({ model: "gpt-4o-mini", messages });
+          const finalizeResponse = await openai.chat.completions.create({ model: chatModel, messages });
           correctionMessage = finalizeResponse.choices[0].message;
         }
 
@@ -980,7 +1001,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
           });
 
           const forcedResponse = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: chatModel,
             messages,
             tools,
             tool_choice: { type: "function", function: { name: "render_chart" } },
@@ -997,7 +1018,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
             }
 
             sendEvent({ status: pickPhaseWord(FINALIZE_PHASE_WORDS) });
-            const wrapUpResponse = await openai.chat.completions.create({ model: "gpt-4o-mini", messages });
+            const wrapUpResponse = await openai.chat.completions.create({ model: chatModel, messages });
             correctionMessage = wrapUpResponse.choices[0].message;
           }
         }
