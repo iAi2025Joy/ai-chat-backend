@@ -48,6 +48,7 @@ import { getRenderChartToolDefinition, handleRenderChartCall } from "./chartTool
 import { getCreateProjectZipToolDefinition, handleCreateProjectZipCall } from "./projectZipTool.js";
 import { getCreatePdfToolDefinition, handleCreatePdfCall } from "./pdfTool.js";
 import { getCreateLatexPdfToolDefinition, handleCreateLatexPdfCall } from "./latexPdfTool.js";
+import { generateDocumentWithClaude } from "./claudeDocumentGenerator.js";
 import { convertLinksToHTML, formatMarkdownToHTML } from "./textFormatting.js";
 import {
   instituteData,
@@ -369,6 +370,40 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // instructions, the same root cause Science mode's own o3 upgrade
     // already fixed for hard reasoning problems.
     const isLongFormDocRequest = detectLongFormDocumentRequest(message);
+
+    // PILOT: long-form document requests (research papers/reports via
+    // create_pdf/create_project_zip/create_latex_pdf) now route through
+    // Claude instead of OpenAI entirely for this turn -- per explicit
+    // request, after this exact task repeatedly hit the same two
+    // failures under o3 (fabricated "real" results, citations reused
+    // from an unrelated earlier topic) even after several rounds of
+    // increasingly specific fixes. Scoped deliberately narrow: only
+    // this detected request type is affected, every other mode/request
+    // keeps using OpenAI exactly as before. Returns early -- the rest
+    // of this handler's OpenAI-specific logic below is skipped entirely
+    // for this turn, since generateDocumentWithClaude already produced
+    // a complete answer (including, when successful, the same
+    // marker-div HTML the OpenAI flow's create_pdf/create_project_zip/
+    // create_latex_pdf handlers produce, so the frontend renders it
+    // identically either way with zero changes needed there).
+    if (isLongFormDocRequest && process.env.ANTHROPIC_API_KEY) {
+      try {
+        sendEvent({ status: "Working through your document with Claude" });
+        const { text: claudeAnswer, docHtml } = await generateDocumentWithClaude(message);
+        sendEvent({ status: getFinalizeStatusLabel(mode) });
+        let claudeFormattedReply = convertLinksToHTML(formatMarkdownToHTML(claudeAnswer || ""));
+        if (docHtml) claudeFormattedReply += docHtml;
+        sendEvent({ done: true, reply: claudeFormattedReply, raw_reply: claudeAnswer || "", extracted_document_text: null });
+        res.end();
+        return;
+      } catch (err) {
+        console.error("generateDocumentWithClaude failed, falling back to the existing OpenAI flow for this turn:", err.message);
+        // Deliberately falls through to the normal OpenAI flow below
+        // rather than failing the whole request -- a real, working
+        // (if not-yet-improved) answer beats none at all.
+      }
+    }
+
     const chatModel = (mode === "science" || isLongFormDocRequest)
       ? "o3"
       : ((Array.isArray(images) && images.length > 0) ? "gpt-4o" : "gpt-4o-mini");
