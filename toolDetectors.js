@@ -192,6 +192,30 @@ export function detectLongFormDocumentRequest(message) {
   return mentionsDocumentType && (mentionsOutputFormat || mentionsDepthCue);
 }
 
+// DETECT THE LITERAL FILE FORMAT WORD THE PERSON ACTUALLY USED -- a
+// confirmed real bug this fixes: asked explicitly for a "pdf document",
+// a response still delivered a raw LaTeX .zip instead -- despite
+// written instructions telling the model to match the literal word,
+// TWICE, in two separate system prompts (the original OpenAI one, and
+// the newer Claude one). Two separate prompt-only attempts failing the
+// same way is the same lesson every other recurring bug in this system
+// taught: a written rule the model can silently ignore holds up worse
+// than a real code-level constraint. This lets the caller RESTRICT
+// which document tools are even offered to the model, based on the
+// person's own literal words, rather than trusting free tool choice.
+export function detectRequestedDocumentFormat(message) {
+  if (!message || typeof message !== "string") return null;
+  const text = message.toLowerCase();
+
+  if (/\b(zip|overleaf|latex source|latex project|\.tex file)\b/.test(text)) {
+    return "zip";
+  }
+  if (/\bpdf\b/.test(text)) {
+    return "pdf";
+  }
+  return null; // ambiguous/unspecified -- let the model use judgment
+}
+
 // ------------------------------------------------------------------
 // FORCE search_web FOR CLASSIC FACTUAL LOOKUP QUESTIONS -- a confirmed
 // real bug this fixes: asked "where is village Meddin in Jordan", GPT

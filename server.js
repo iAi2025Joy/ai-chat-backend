@@ -48,8 +48,7 @@ import { getRenderChartToolDefinition, handleRenderChartCall } from "./chartTool
 import { getCreateProjectZipToolDefinition, handleCreateProjectZipCall } from "./projectZipTool.js";
 import { getCreatePdfToolDefinition, handleCreatePdfCall } from "./pdfTool.js";
 import { getCreateLatexPdfToolDefinition, handleCreateLatexPdfCall } from "./latexPdfTool.js";
-import { generateDocumentWithClaude } from "./claudeDocumentGenerator.js";
-import { convertLinksToHTML, formatMarkdownToHTML } from "./textFormatting.js";
+import { generateDocumentWithClaude } from "./claudeDocumentGenerator.js";import { convertLinksToHTML, formatMarkdownToHTML } from "./textFormatting.js";
 import {
   instituteData,
   SPOKEN_LANGUAGE_KEY_TO_NAME,
@@ -65,6 +64,7 @@ import {
   detectForcedChartRequest,
   detectForcedWebSearch,
   detectLongFormDocumentRequest,
+  detectRequestedDocumentFormat,
 } from "./toolDetectors.js";
 import {
   retrieveCybersecurityKnowledge,
@@ -388,8 +388,9 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // identically either way with zero changes needed there).
     if (isLongFormDocRequest && process.env.ANTHROPIC_API_KEY) {
       try {
-        sendEvent({ status: "Working through your document with Claude" });
-        const { text: claudeAnswer, docHtml } = await generateDocumentWithClaude(message);
+        sendEvent({ status: "Working through your document" });
+        const requestedFormat = detectRequestedDocumentFormat(message);
+        const { text: claudeAnswer, docHtml } = await generateDocumentWithClaude(message, requestedFormat, sendEvent);
         sendEvent({ status: getFinalizeStatusLabel(mode) });
         let claudeFormattedReply = convertLinksToHTML(formatMarkdownToHTML(claudeAnswer || ""));
         if (docHtml) claudeFormattedReply += docHtml;
