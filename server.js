@@ -352,6 +352,31 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     const chatModel = (mode === "science" || isLongFormDocRequest)
       ? "o3"
       : ((Array.isArray(images) && images.length > 0) ? "gpt-4o" : "gpt-4o-mini");
+
+    // A confirmed real bug this fixes: asked for a large, detailed
+    // multi-page PDF, GARNET's own preamble text confidently promised a
+    // full ~13-page report (literature review, ethics section, chart,
+    // table, 18 references) -- and then no PDF ever actually appeared,
+    // completely silently. Reasoning models like o3 have a real,
+    // well-documented failure mode behind exactly this symptom: their
+    // internal reasoning/"thinking" tokens count against the SAME
+    // output cap as the final visible answer (including a large tool
+    // call's JSON arguments), and none of these completion calls were
+    // setting any output-length cap at all -- meaning OpenAI's own
+    // low/default cap applied, which a genuinely large structured
+    // create_pdf payload (13 pages of nested sections/tables) can
+    // exhaust entirely on reasoning alone, leaving nothing left for the
+    // actual tool-call JSON -- which then arrives truncated/invalid,
+    // fails validation in handleCreatePdfCall, and produces nothing
+    // for the user with no visible error (see the "could not parse
+    // arguments JSON" log in pdfTool.js, which should confirm this
+    // exact failure in Render's logs if this is really the cause).
+    // Reasoning models use max_completion_tokens (an alias of the
+    // older max_tokens, but the name reasoning models actually expect)
+    // -- set generously high specifically for o3 so a large document
+    // has real room to complete, while gpt-4o/gpt-4o-mini elsewhere
+    // keep using OpenAI's own default (unset), unaffected by this.
+    const reasoningModelExtraParams = chatModel === "o3" ? { max_completion_tokens: 32000 } : {};
     // images (optional): an ARRAY of base64 data URLs for one or more
     // images the user attached -- passed through as image_url blocks in
     // OpenAI's vision input format further below.
@@ -716,10 +741,20 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         ...(forcedToolName
           ? { tool_choice: { type: "function", function: { name: forcedToolName } } }
           : {}),
+        ...reasoningModelExtraParams,
       });
 
       let responseMessage = aiResponse.choices[0].message;
 
+      // Logged (not yet surfaced to the user) so a truncated-output
+      // failure -- e.g. a large create_pdf call cut off mid-JSON before
+      // max_completion_tokens was set above -- is clearly greppable in
+      // Render's logs ("FINISH_REASON=length") instead of just silently
+      // vanishing with no trace, if it happens again despite the higher
+      // cap.
+      if (aiResponse.choices[0].finish_reason === "length") {
+        console.error(`FINISH_REASON=length -- model=${chatModel}, mode=${mode} -- the response was cut off by the output token limit, not completed naturally.`);
+      }
       // ✅ If the model decided to call get_gold_prediction, search_web,
       // get_live_gold_price, or (new) get_gold_price_history, run whichever
       // was requested and make a second call so the model can compose the
@@ -864,6 +899,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
             model: chatModel,
             messages,
             tools, // kept available every round -- lets the model chain a further tool call (e.g. fetch_web_page after search_web) instead of being cut off after one batch
+            ...reasoningModelExtraParams,
           });
           responseMessage = aiResponse.choices[0].message;
         }
@@ -876,7 +912,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // showing the user a blank reply.
         if ((!responseMessage.content || !responseMessage.content.trim()) && toolRound >= MAX_TOOL_ROUNDS) {
           sendEvent({ status: getFinalizeStatusLabel(mode) });
-          aiResponse = await openai.chat.completions.create({ model: chatModel, messages });
+          aiResponse = await openai.chat.completions.create({ model: chatModel, messages, ...reasoningModelExtraParams });
           responseMessage = aiResponse.choices[0].message;
         }
 
@@ -998,6 +1034,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
           messages,
           tools,
           tool_choice: "required",
+          ...reasoningModelExtraParams,
         });
         let correctionMessage = correctionResponse.choices[0].message;
 
@@ -1054,6 +1091,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
             model: chatModel,
             messages,
             tools, // free choice from here -- don't keep forcing once it's had a real chance to gather data and chart it
+            ...reasoningModelExtraParams,
           });
           correctionMessage = correctionResponse.choices[0].message;
         }
@@ -1063,7 +1101,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // content is never left empty.
         if ((!correctionMessage.content || !correctionMessage.content.trim()) && correctionMessage.tool_calls && correctionMessage.tool_calls.length > 0) {
           sendEvent({ status: getFinalizeStatusLabel(mode) });
-          const finalizeResponse = await openai.chat.completions.create({ model: chatModel, messages });
+          const finalizeResponse = await openai.chat.completions.create({ model: chatModel, messages, ...reasoningModelExtraParams });
           correctionMessage = finalizeResponse.choices[0].message;
         }
 
@@ -1097,6 +1135,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
             messages,
             tools,
             tool_choice: { type: "function", function: { name: "render_chart" } },
+            ...reasoningModelExtraParams,
           });
           const forcedMessage = forcedResponse.choices[0].message;
 
@@ -1110,7 +1149,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
             }
 
             sendEvent({ status: getFinalizeStatusLabel(mode) });
-            const wrapUpResponse = await openai.chat.completions.create({ model: chatModel, messages });
+            const wrapUpResponse = await openai.chat.completions.create({ model: chatModel, messages, ...reasoningModelExtraParams });
             correctionMessage = wrapUpResponse.choices[0].message;
           }
         }
