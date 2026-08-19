@@ -47,6 +47,7 @@ import { transcribeAudio } from "./audioTranscriber.js";
 import { getRenderChartToolDefinition, handleRenderChartCall } from "./chartTool.js";
 import { getCreateProjectZipToolDefinition, handleCreateProjectZipCall } from "./projectZipTool.js";
 import { getCreatePdfToolDefinition, handleCreatePdfCall } from "./pdfTool.js";
+import { getCreateLatexPdfToolDefinition, handleCreateLatexPdfCall } from "./latexPdfTool.js";
 import { convertLinksToHTML, formatMarkdownToHTML } from "./textFormatting.js";
 import {
   instituteData,
@@ -135,6 +136,11 @@ const TOOL_STATUS_LABELS = {
   // for long-form document requests) -- worth telling the person that
   // directly rather than leaving a longer wait unexplained.
   create_pdf: "Writing the PDF content (this can take longer for a detailed document)",
+  // A real, separate step from create_pdf above -- an actual external
+  // LaTeX compilation call, genuinely slower and worth naming
+  // specifically so a longer wait here doesn't feel like nothing is
+  // happening.
+  create_latex_pdf: "Compiling the LaTeX into a real PDF (this can take a bit longer, and occasionally fails if the compile service is busy)",
 };
 
 // A confirmed real gap this fixes: the status shown right AFTER a tool
@@ -161,6 +167,7 @@ const TOOL_REVIEW_LABELS = {
   // Same real gap as TOOL_STATUS_LABELS above -- create_pdf was
   // missing here too.
   create_pdf: "Reviewing the finished PDF",
+  create_latex_pdf: "Reviewing the compiled PDF",
 };
 
 // Research-related tools get a guaranteed preceding "Investigating"
@@ -487,6 +494,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // tool loop below, appended to the final reply alongside any charts.
     let renderedZipBlocksForResponse = [];
     let renderedPdfBlocksForResponse = [];
+    let renderedLatexPdfBlocksForResponse = [];
     // Also declared here (not just inside the OpenAI branch below) so the
     // final diagnostic logging near the end of the route can reference it
     // too -- a real scope bug already caught once before with this exact
@@ -611,7 +619,12 @@ app.post("/chat", rateLimitChat, async (req, res) => {
             "MATH FORMULAS: when solving or presenting a mathematical formula/equation, write it using real LaTeX math notation, not plain-text approximations (e.g. write proper fractions, exponents, square roots, Greek letters, summation/integral signs, subscripts) -- wrap inline math in \\( and \\), and standalone/display equations in \\[ and \\] on their own line (both render as real typeset math automatically; do NOT use single or double dollar signs as delimiters). For a step-by-step solution, give each step its own **bold** step label (e.g. **Step 1: Isolate x**) followed by the real math for that step -- one bold label per step, not one giant unlabeled block. Use genuine LaTeX commands (\\frac{}{}, \\sqrt{}, x^2, x_1, \\sum, \\int, \\alpha, \\pi, \\leq, \\times, etc.) rather than typing things like \"x^2\" or \"sqrt(x)\" as plain text. " +
             "CODE: whenever you provide code in any programming or markup language (Python, Java, JavaScript, C++, LaTeX/Overleaf source, SQL, HTML, anything) always use a standard fenced code block with the language name right after the opening triple-backtick (e.g. ```python, ```java, ```latex) -- this automatically renders as a real, syntax-highlighted code window with its own copy button, the same way ChatGPT and other coding assistants present code, not as plain inline text. Never describe code in prose or paste it unfenced. If you genuinely don't know the language, still use a fenced block with no language tag rather than skipping the fence. " +
             "MULTI-FILE LATEX/OVERLEAF PROJECTS: when the user needs a genuinely multi-file LaTeX project (e.g. main.tex plus a separate references.bib, a custom .cls/.sty file, or content split into files like sections/intro.tex) -- as opposed to a single LaTeX document, which just needs one ```latex code block -- call the create_project_zip function with the real project name and every real file's filename and content. This packages the files into an actual downloadable .zip automatically; do NOT also paste the file contents again as code blocks, and do NOT use this tool for a single-file request. Write real, complete, working file content for each file -- never a placeholder or \"add your content here\" stub. " +
-            "NAMED ACADEMIC VENUE FORMAT REQUESTS -- ALWAYS USE create_project_zip, NEVER create_pdf -- a confirmed real bug this fixes: asked for \"a research paper for USENIX\", a prior response used create_pdf and produced a generic single-column report with no relation to USENIX's real requirements at all. When the user names a specific academic venue/conference/journal format (USENIX, IEEE, ACM, NeurIPS, Springer LNCS, etc.), this is a REAL, specific formatting requirement, not a vague style preference -- USENIX papers, for example, are genuinely required to be two-column, 10-point Times Roman on 12-point leading, in a 7\"x9\" text block, using USENIX's own official LaTeX template/class file (available from usenix.org/conferences/author-resources/paper-templates). create_pdf CANNOT produce a proper two-column academic layout at all -- it is fundamentally the wrong tool for a named-venue request, regardless of how good the content itself is. Always use create_project_zip for these, writing real LaTeX that follows the actual named venue's real formatting conventions (two-column class/package, correct margins, correct section conventions) as closely as you can -- and say plainly if you're not fully certain of that venue's exact current template details, rather than presenting a generic layout as if it met a specific venue's real requirements. " +
+            "GIVE THE PERSON THE EXACT FILE TYPE THEY ACTUALLY ASKED FOR -- READ THIS FIRST, HIGH-PRIORITY RULE, OVERRIDES ANY OTHER TOOL-CHOICE GUIDANCE BELOW (a confirmed real bug this fixes: asked explicitly for a PDF of a USENIX-formatted paper, a prior response used create_project_zip and handed over raw LaTeX source in a .zip instead -- technically correct-looking content, but not the actual file type requested, leaving the person needing to compile it themselves when they'd asked for a finished PDF). There are now three real document tools, and the choice between them is decided by the LITERAL file type/format word the person actually used, not by what seems more \"correct\" or impressive for the content: " +
+            "-- If they say \"zip\", \"Overleaf\", \"LaTeX project\", \"LaTeX source\", or similar -- use create_project_zip. They get the raw editable source. " +
+            "-- If they say \"pdf\" (or ask to \"give me/create/make a PDF\") for a document that's simple enough for create_pdf's plain layout (no real typeset math, no specific named academic venue's exact formatting) -- use create_pdf. " +
+            "-- If they say \"pdf\" for a document that genuinely needs real LaTeX-quality typesetting to be a REAL, correct PDF -- typeset math/equations, or a specific named academic venue's real two-column format (USENIX, IEEE, ACM, etc.) -- use create_latex_pdf, which actually compiles real LaTeX into a real PDF server-side, rather than downgrading to create_pdf's simpler layout (which cannot produce that formatting) or upgrading to create_project_zip's raw source (which isn't the PDF they actually asked for). " +
+            "Never silently substitute one file type for another because it seems more correct, more complete, or more venue-compliant -- if the person's own words say \"pdf\", the deliverable must actually be a real .pdf file, not raw LaTeX source they have to compile themselves; if their words say \"zip\"/\"Overleaf\", give real source, not a flattened PDF. create_latex_pdf can occasionally fail (a genuine external compile step, not fully reliable) -- if it does, explain that honestly and offer create_project_zip as a fallback so the person still gets something real, rather than pretending the compile succeeded. " +
+            "NAMED ACADEMIC VENUE FORMAT REQUESTS -- a confirmed real bug this fixes: asked for \"a research paper for USENIX\", a prior response used create_pdf and produced a generic single-column report with no relation to USENIX's real requirements at all. When the user names a specific academic venue/conference/journal format (USENIX, IEEE, ACM, NeurIPS, Springer LNCS, etc.), this is a REAL, specific formatting requirement, not a vague style preference -- USENIX papers, for example, are genuinely required to be two-column, 10-point Times Roman on 12-point leading, in a 7\"x9\" text block, using USENIX's own official LaTeX template/class file (available from usenix.org/conferences/author-resources/paper-templates). Write real LaTeX that follows the actual named venue's real formatting conventions (two-column class/package, correct margins, correct section conventions) as closely as you can -- and say plainly if you're not fully certain of that venue's exact current template details, rather than presenting a generic layout as if it met a specific venue's real requirements. Which TOOL delivers this (create_project_zip vs. create_latex_pdf) is governed by the GIVE THE PERSON THE EXACT FILE TYPE rule above -- the venue determines the LaTeX content's real formatting; the person's own words determine which tool/file type to actually hand them. " +
             "NEVER PRESENT FABRICATED EXPERIMENTAL DATA AS REAL MEASUREMENTS -- READ THIS FIRST, HIGH-PRIORITY RULE, applies to create_pdf AND create_project_zip equally (a confirmed real, serious bug this fixes: a report included a table literally labeled \"Measured\" with specific invented numbers -- e.g. a specific hover endurance in minutes, a specific positional accuracy in centimeters -- presented as if a real drone had actually been built and flight-tested, when no such test ever happened). This is a serious integrity failure, categorically worse than thin content: it presents synthetic, invented numbers as genuine empirical findings. NEVER label invented, illustrative, or typical/expected numbers as \"Measured\", \"Results\", \"Test Data\", or any other framing that implies a real experiment was actually conducted, unless a real experiment's real data was actually provided to you or found via search_web from a real, cited source. If you want to illustrate typical/expected performance for a design (which is legitimate and often useful), label it explicitly and honestly as an ESTIMATE, TYPICAL RANGE, or ILLUSTRATIVE EXAMPLE based on comparable real systems (cite the real systems if you can), never as measured results from a test that didn't happen. This applies to any document type, not just drone reports -- any specific-looking quantitative 'result' you did not actually derive from real cited data or a real calculation shown in your own work is fabrication, not detail. " +
             "MATCH THE REAL DEPTH/LENGTH THE PERSON ACTUALLY ASKED FOR -- APPLIES EQUALLY TO create_pdf AND create_project_zip, NOT JUST LATEX -- a confirmed real bug this fixes: asked for a full, detailed research paper, a prior response generated only about 2 pages of thin content when genuinely thorough coverage (and the person's own stated page-count expectation) called for far more; a follow-up complaint confirmed it was still missing real analysis, correlation between ideas, charts, tables, and a genuine conclusion entirely; and a further follow-up specifically called out that ethics, discussion, and overall professional polish were still weak or absent. When someone asks for a \"full\", \"detailed\", \"complete\", \"professional\", or specific-length (e.g. \"7 pages\") research paper, report, or similar long-form document -- through EITHER create_pdf or create_project_zip, this checklist applies the same way regardless of which output format they asked for -- actually write that much real, substantive content, and make sure it genuinely includes ALL of the following, not just section headers standing in for them: " +
             "(1) a real, multi-paragraph introduction that establishes the problem and why it matters -- not a single thin paragraph; " +
@@ -736,6 +749,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         getRenderChartToolDefinition(),
         getCreateProjectZipToolDefinition(),
         getCreatePdfToolDefinition(),
+        getCreateLatexPdfToolDefinition(),
         getLiveGoldPriceToolDefinition(),
         getGoldPriceHistoryToolDefinition(),
         getOilPredictionToolDefinition(),
@@ -854,6 +868,10 @@ app.post("/chat", rateLimitChat, async (req, res) => {
               const { toolResult: pdfToolResult, pdfHtml } = handleCreatePdfCall(toolCall.function.arguments);
               toolResult = pdfToolResult;
               if (pdfHtml) renderedPdfBlocksForResponse.push(pdfHtml);
+            } else if (toolCall.function.name === "create_latex_pdf") {
+              const { toolResult: latexPdfToolResult, latexPdfHtml } = await handleCreateLatexPdfCall(toolCall.function.arguments);
+              toolResult = latexPdfToolResult;
+              if (latexPdfHtml) renderedLatexPdfBlocksForResponse.push(latexPdfHtml);
             } else if (toolCall.function.name === "get_live_gold_price") {
               toolResult = await handleLiveGoldPriceCall();
             } else if (toolCall.function.name === "get_gold_price_history") {
@@ -1231,6 +1249,11 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     if (renderedPdfBlocksForResponse.length > 0) {
       formattedReply += renderedPdfBlocksForResponse.join("");
       console.log(`create_pdf: appended ${renderedPdfBlocksForResponse.length} PDF(s) to final response. Final reply length: ${formattedReply.length}`);
+    }
+
+    if (renderedLatexPdfBlocksForResponse.length > 0) {
+      formattedReply += renderedLatexPdfBlocksForResponse.join("");
+      console.log(`create_latex_pdf: appended ${renderedLatexPdfBlocksForResponse.length} compiled PDF(s) to final response. Final reply length: ${formattedReply.length}`);
     }
 
     // Final event -- the frontend (see deliverMessage in index.html)
