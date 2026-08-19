@@ -158,6 +158,41 @@ export function detectForcedChartRequest(message) {
 }
 
 // ------------------------------------------------------------------
+// DETECT A LONG-FORM DOCUMENT REQUEST (report/paper/PDF/LaTeX) -- a
+// confirmed real bug this fixes: asked in General Chat for "a report
+// in pdf about making drones, make it scientific and detailed", the
+// response used gpt-4o-mini (the default for General Chat with no
+// image attached) and came back thin -- no literature review, no
+// analysis, NO ethics section at all despite that being an explicit,
+// unconditional requirement elsewhere in this system, and only 2 weak,
+// never-actually-cited references. The MATCH THE REAL DEPTH/LENGTH
+// checklist instruction was genuinely present in the system prompt the
+// whole time (it's global, not mode-gated) and the word "detailed" in
+// the request should have triggered it -- the real problem was model
+// capacity, not missing instructions: reliably executing an 8+ point
+// simultaneous checklist while also generating valid structured tool-
+// call arguments (create_pdf's JSON sections) is a harder task than
+// gpt-4o-mini handles well. This detector lets server.js bump to a
+// stronger model for exactly this request type, in ANY mode, mirroring
+// the same principle already applied to attached images.
+export function detectLongFormDocumentRequest(message) {
+  if (!message || typeof message !== "string") return false;
+  const text = message.toLowerCase();
+
+  const mentionsDocumentType = /\b(report|paper|research paper|thesis|dissertation|whitepaper|white paper|document|essay|article)\b/.test(text);
+  const mentionsOutputFormat = /\b(pdf|latex|overleaf|\.tex)\b/.test(text);
+  const mentionsDepthCue = /\b(full|detailed|in[- ]depth|complete|comprehensive|thorough|professional|scientific|academic|rigorous)\b/.test(text);
+
+  // Needs the document-type word plus at least one of (an explicit
+  // output format OR a depth cue) -- "write me a report" alone is too
+  // broad and would over-trigger on short, casual requests that don't
+  // actually need this; "report... in pdf" or "detailed report" both
+  // genuinely signal the long-form, rigor-demanding case this exists
+  // for.
+  return mentionsDocumentType && (mentionsOutputFormat || mentionsDepthCue);
+}
+
+// ------------------------------------------------------------------
 // FORCE search_web FOR CLASSIC FACTUAL LOOKUP QUESTIONS -- a confirmed
 // real bug this fixes: asked "where is village Meddin in Jordan", GPT
 // did not call search_web at all and instead answered directly from

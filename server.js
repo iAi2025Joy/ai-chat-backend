@@ -62,6 +62,7 @@ import {
   detectForcedImageSearch,
   detectForcedChartRequest,
   detectForcedWebSearch,
+  detectLongFormDocumentRequest,
 } from "./toolDetectors.js";
 import {
   retrieveCybersecurityKnowledge,
@@ -336,7 +337,21 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // and proportionate cost/latency for modes that aren't specifically
     // promising rigorous, fully-analyzed correctness the way Science
     // and Research explicitly does.
-    const chatModel = mode === "science" ? "o3" : ((Array.isArray(images) && images.length > 0) ? "gpt-4o" : "gpt-4o-mini");
+    // ALSO bumped to "o3" for a detected long-form document request
+    // (report/paper via create_pdf or create_project_zip), in ANY
+    // mode -- see detectLongFormDocumentRequest's own comment in
+    // toolDetectors.js for the confirmed real bug this fixes: the
+    // MATCH THE REAL DEPTH/LENGTH checklist (including the required
+    // ethics section) was present in the system prompt the whole
+    // time, but gpt-4o-mini in General Chat still produced a thin,
+    // checklist-missing PDF -- the real bottleneck was model capacity
+    // for a demanding, many-part simultaneous requirement, not missing
+    // instructions, the same root cause Science mode's own o3 upgrade
+    // already fixed for hard reasoning problems.
+    const isLongFormDocRequest = detectLongFormDocumentRequest(message);
+    const chatModel = (mode === "science" || isLongFormDocRequest)
+      ? "o3"
+      : ((Array.isArray(images) && images.length > 0) ? "gpt-4o" : "gpt-4o-mini");
     // images (optional): an ARRAY of base64 data URLs for one or more
     // images the user attached -- passed through as image_url blocks in
     // OpenAI's vision input format further below.
