@@ -495,6 +495,73 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     let renderedZipBlocksForResponse = [];
     let renderedPdfBlocksForResponse = [];
     let renderedLatexPdfBlocksForResponse = [];
+
+    // DOCUMENT INTEGRITY CHECK -- a genuine code-level verification
+    // step, added after TWO separate rounds of increasingly specific
+    // prompt instructions failed to stop the same two violations from
+    // recurring on the very next attempt (a drone-propulsion paper's
+    // author name resurfacing, now with an invented justification for
+    // why it was relevant, and a claimed real deployed user study --
+    // "six rooms, 32 IoT devices, 48 hours of data" -- with fabricated
+    // results, the second time a claimed-real-study fabrication
+    // appeared under a different specific cover story). Rather than a
+    // fifth prompt-wording attempt at a problem prompt-only fixes keep
+    // failing to hold, this runs one real, separate verification pass
+    // over the ACTUAL generated document text before it's ever shown
+    // to the user, checking specifically for the two confirmed
+    // recurring violations. If it finds either, the tool call is
+    // rejected with a specific, actionable error -- not silently
+    // passed through -- so the SAME model sees exactly what's wrong
+    // and gets a real chance to regenerate correctly, the same
+    // tool-call-retry pattern already used for ordinary validation
+    // failures elsewhere in this file.
+    async function checkDocumentIntegrity(fullText) {
+      if (!fullText || fullText.trim().length < 200) return { passed: true };
+      try {
+        const checkResp = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a strict academic-integrity checker for a generated research document. Check the document text below for exactly two specific violations: " +
+                "(1) FABRICATED REAL-WORLD RESULTS: does it claim a specific real experiment, deployment, field trial, or user study was actually conducted (e.g. naming a specific number of participants, households, rooms, devices, testbeds, or a specific time duration) and then present specific numeric 'results' as if genuinely measured from it? Proposed/future evaluation plans, clearly framed as not-yet-conducted, are FINE and not a violation. " +
+                "(2) OFF-TOPIC REFERENCES: does the references list include any citation whose real subject matter is clearly unrelated to this document's own actual topic (e.g. a citation about drones/UAVs/propulsion appearing in a paper about an unrelated subject)? " +
+                "Respond with ONLY a JSON object: {\"passed\": true} if neither violation is present, or {\"passed\": false, \"violations\": \"<specific description of exactly what's wrong and where, so it can be fixed>\"} if either is present. No other text.",
+            },
+            { role: "user", content: fullText.slice(0, 12000) },
+          ],
+          response_format: { type: "json_object" },
+        });
+        const parsed = JSON.parse(checkResp.choices[0].message.content);
+        return parsed.passed ? { passed: true } : { passed: false, violations: parsed.violations || "Integrity check failed." };
+      } catch (err) {
+        // If the check itself fails (network hiccup, bad JSON, etc.),
+        // fail OPEN -- don't block a legitimate document over a broken
+        // checker. This is a safety net, not a hard gate that should
+        // itself become a new point of failure.
+        console.error("checkDocumentIntegrity: check itself failed, allowing document through:", err.message);
+        return { passed: true };
+      }
+    }
+
+    function extractPlainTextFromToolArgs(toolName, argsJson) {
+      try {
+        const args = JSON.parse(argsJson);
+        if (toolName === "create_pdf") {
+          return (args.sections || [])
+            .map((s) => [s.text, ...(s.items || []), ...((s.rows || []).flat())].filter(Boolean).join(" "))
+            .join("\n");
+        }
+        if (toolName === "create_project_zip" || toolName === "create_latex_pdf") {
+          return (args.files || []).map((f) => f.content || "").join("\n");
+        }
+      } catch {
+        // fall through
+      }
+      return "";
+    }
+
     // Also declared here (not just inside the OpenAI branch below) so the
     // final diagnostic logging near the end of the route can reference it
     // too -- a real scope bug already caught once before with this exact
@@ -864,17 +931,39 @@ app.post("/chat", rateLimitChat, async (req, res) => {
               toolResult = chartToolResult;
               if (chartHtml) renderedChartBlocks.push(chartHtml);
             } else if (toolCall.function.name === "create_project_zip") {
-              const { toolResult: zipToolResult, zipHtml } = handleCreateProjectZipCall(toolCall.function.arguments);
-              toolResult = zipToolResult;
-              if (zipHtml) renderedZipBlocksForResponse.push(zipHtml);
+              const zipIntegrityResult = await checkDocumentIntegrity(extractPlainTextFromToolArgs("create_project_zip", toolCall.function.arguments));
+              if (!zipIntegrityResult.passed) {
+                console.error("create_project_zip: FAILED integrity check (before build):", zipIntegrityResult.violations);
+                toolResult = JSON.stringify({ error: `This draft has a real accuracy problem that must be fixed before it can be delivered: ${zipIntegrityResult.violations} Please regenerate the project with this fixed.` });
+              } else {
+                const { toolResult: zipToolResult, zipHtml } = handleCreateProjectZipCall(toolCall.function.arguments);
+                toolResult = zipToolResult;
+                if (zipHtml) renderedZipBlocksForResponse.push(zipHtml);
+              }
             } else if (toolCall.function.name === "create_pdf") {
-              const { toolResult: pdfToolResult, pdfHtml } = handleCreatePdfCall(toolCall.function.arguments);
-              toolResult = pdfToolResult;
-              if (pdfHtml) renderedPdfBlocksForResponse.push(pdfHtml);
+              const pdfIntegrityResult = await checkDocumentIntegrity(extractPlainTextFromToolArgs("create_pdf", toolCall.function.arguments));
+              if (!pdfIntegrityResult.passed) {
+                console.error("create_pdf: FAILED integrity check (before build):", pdfIntegrityResult.violations);
+                toolResult = JSON.stringify({ error: `This draft has a real accuracy problem that must be fixed before it can be delivered: ${pdfIntegrityResult.violations} Please regenerate the PDF with this fixed.` });
+              } else {
+                const { toolResult: pdfToolResult, pdfHtml } = handleCreatePdfCall(toolCall.function.arguments);
+                toolResult = pdfToolResult;
+                if (pdfHtml) renderedPdfBlocksForResponse.push(pdfHtml);
+              }
             } else if (toolCall.function.name === "create_latex_pdf") {
-              const { toolResult: latexPdfToolResult, latexPdfHtml } = await handleCreateLatexPdfCall(toolCall.function.arguments);
-              toolResult = latexPdfToolResult;
-              if (latexPdfHtml) renderedLatexPdfBlocksForResponse.push(latexPdfHtml);
+              // Checked BEFORE the real (slow, external) compile call
+              // specifically here -- no point spending a real
+              // latex.ytotech.com compile on content that's about to be
+              // rejected and regenerated anyway.
+              const latexIntegrityResult = await checkDocumentIntegrity(extractPlainTextFromToolArgs("create_latex_pdf", toolCall.function.arguments));
+              if (!latexIntegrityResult.passed) {
+                console.error("create_latex_pdf: FAILED integrity check (before compile):", latexIntegrityResult.violations);
+                toolResult = JSON.stringify({ error: `This draft has a real accuracy problem that must be fixed before it can be delivered: ${latexIntegrityResult.violations} Please regenerate the LaTeX with this fixed.` });
+              } else {
+                const { toolResult: latexPdfToolResult, latexPdfHtml } = await handleCreateLatexPdfCall(toolCall.function.arguments);
+                toolResult = latexPdfToolResult;
+                if (latexPdfHtml) renderedLatexPdfBlocksForResponse.push(latexPdfHtml);
+              }
             } else if (toolCall.function.name === "get_live_gold_price") {
               toolResult = await handleLiveGoldPriceCall();
             } else if (toolCall.function.name === "get_gold_price_history") {
