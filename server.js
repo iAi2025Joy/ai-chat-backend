@@ -898,7 +898,18 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // link). This loop keeps `tools` available on every round so the
         // model can genuinely react to what a previous tool call found,
         // capped to prevent a runaway chain.
-        const MAX_TOOL_ROUNDS = 4;
+        // A confirmed real bug this fixes: a long-form document request
+        // (real references need a real search first, THEN the actual
+        // create_pdf/create_project_zip/create_latex_pdf call, and if
+        // that fails the DOCUMENT INTEGRITY CHECK above and needs a
+        // real retry, that's already 3-4 rounds with zero margin left)
+        // was silently exhausting the flat cap of 4 -- the model would
+        // hit MAX_TOOL_ROUNDS mid-retry and fall through to a text-only
+        // response with NO file ever delivered, after already telling
+        // the person it was regenerating one. Document-generation
+        // requests genuinely need more real rounds than a typical
+        // search/chart/prediction turn -- give them that room.
+        const MAX_TOOL_ROUNDS = (mode === "science" || isLongFormDocRequest) ? 8 : 4;
         let toolRound = 0;
 
         while (responseMessage.tool_calls && responseMessage.tool_calls.length > 0 && toolRound < MAX_TOOL_ROUNDS) {
@@ -1034,9 +1045,21 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // which would otherwise leave responseMessage.content empty --
         // force one final answer-only call (no tools) using whatever was
         // actually gathered across the rounds above, rather than risk
-        // showing the user a blank reply.
+        // showing the user a blank reply. Note this call has NO tools
+        // available, so if this fires, a file genuinely cannot be
+        // produced in this turn -- the added system instruction makes
+        // sure the model says so honestly rather than narrating success
+        // it didn't actually achieve (a confirmed real risk: exactly
+        // this dead-end was reached once after several failed document-
+        // integrity-check retries exhausted the round budget, and the
+        // resulting message should be transparent about needing another
+        // attempt, not silently vague).
         if ((!responseMessage.content || !responseMessage.content.trim()) && toolRound >= MAX_TOOL_ROUNDS) {
           sendEvent({ status: getFinalizeStatusLabel(mode) });
+          messages.push({
+            role: "system",
+            content: "You were not able to finish this within the available rounds (e.g. a document kept failing an accuracy check and needed more regeneration attempts than fit this turn). No tools are available in this final response. Be honest and clear that the file could not be completed successfully this turn, briefly say why if you know (e.g. it kept needing corrections), and ask the person to send the same request again to retry -- do not claim a file was produced or is on its way if it wasn't actually created.",
+          });
           aiResponse = await openai.chat.completions.create({ model: chatModel, messages, ...reasoningModelExtraParams });
           responseMessage = aiResponse.choices[0].message;
         }
