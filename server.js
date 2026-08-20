@@ -287,41 +287,6 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Wraps openai.chat.completions.create() with real backoff for the
-// TPM (tokens-per-minute) 429 case specifically. A confirmed real bug
-// this fixes: a document-generation retry (after checkDocumentIntegrity
-// rejects a draft) hit "Request too large ... Limit 30000, Requested
-// 30198" and the call just threw -- no retry, no wait, the whole /chat
-// request died and the user got nothing after already being told a
-// regeneration was happening. OpenAI's own error response already
-// includes exactly how long to wait (`x-ratelimit-reset-tokens`, e.g.
-// "44.26s") -- this reads that header and waits the real amount instead
-// of guessing, then retries once. Only handles the TPM case (429 with a
-// numeric reset-tokens header); any other error still throws immediately
-// so real failures aren't masked as retryable ones.
-async function createChatCompletionWithRateLimitRetry(params, maxRetries = 2) {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await openai.chat.completions.create(params);
-    } catch (err) {
-      const isTpmRateLimit = err?.status === 429 && err?.code === "rate_limit_exceeded" && err?.type === "tokens";
-      const resetHeader = err?.headers?.["x-ratelimit-reset-tokens"];
-      if (!isTpmRateLimit || !resetHeader || attempt === maxRetries) {
-        throw err;
-      }
-      // Header looks like "44.26s" or "120ms" -- parse the number and
-      // unit rather than assuming seconds, plus a small fixed buffer
-      // since the reset boundary itself is an estimate.
-      const parsedWait = /^([\d.]+)(ms|s)$/.exec(resetHeader.trim());
-      const waitMs = parsedWait
-        ? (parsedWait[2] === "ms" ? parseFloat(parsedWait[1]) : parseFloat(parsedWait[1]) * 1000) + 1000
-        : 5000; // fallback if OpenAI ever changes the header format
-      console.error(`OpenAI TPM rate limit hit (attempt ${attempt + 1}/${maxRetries + 1}), waiting ${waitMs}ms per x-ratelimit-reset-tokens before retry:`, err.message);
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
-    }
-  }
-}
-
 
 app.post("/chat", rateLimitChat, async (req, res) => {
   // ------------------------------------------------------------------
@@ -615,26 +580,6 @@ app.post("/chat", rateLimitChat, async (req, res) => {
       }
     }
 
-    // Replaces a REJECTED draft's own tool-call arguments in conversation
-    // history with a short placeholder, instead of leaving the full
-    // multi-thousand-token draft sitting in `messages` for every
-    // subsequent round. A confirmed real bug this fixes: on a
-    // document-integrity retry, the full rejected draft (as the
-    // assistant's own tool_call arguments), the violation message, AND a
-    // fresh generation all got resent together -- which is what pushed a
-    // real request to "Requested 30198" against the account's real 30000
-    // TPM ceiling, even after the OUTPUT cap alone had already been
-    // reduced twice (32000 -> 24000 -> 18000) specifically to leave room
-    // for this. The model doesn't need its own full rejected text handed
-    // back to it -- the violations message already says exactly what to
-    // fix -- so this drops the bulk of the retry's INPUT-side token cost
-    // instead of continuing to only trim the output side.
-    function compactRejectedDraftArguments(toolName, violations) {
-      return JSON.stringify({
-        _note: `[Previous ${toolName} draft omitted here to save tokens -- it was rejected by the integrity check for: ${violations} Do not treat this note as the draft itself; write a fresh version that avoids the violations described above.]`,
-      });
-    }
-
     function extractPlainTextFromToolArgs(toolName, argsJson) {
       try {
         const args = JSON.parse(argsJson);
@@ -926,7 +871,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
       // prompt's own "ALWAYS CALL PREDICTION TOOLS FRESH" rule.
       const forcedToolName = detectForcedPredictionTool(message) || detectForcedImageSearch(message) || detectForcedChartRequest(message) || detectForcedWebSearch(message);
 
-      let aiResponse = await createChatCompletionWithRateLimitRetry({
+      let aiResponse = await openai.chat.completions.create({
         model: chatModel,
         messages,
         tools,
@@ -1039,7 +984,6 @@ app.post("/chat", rateLimitChat, async (req, res) => {
               if (!zipIntegrityResult.passed) {
                 console.error("create_project_zip: FAILED integrity check (before build):", zipIntegrityResult.violations);
                 toolResult = JSON.stringify({ error: `This draft has a real accuracy problem that must be fixed before it can be delivered: ${zipIntegrityResult.violations} Please regenerate the project with this fixed.` });
-                toolCall.function.arguments = compactRejectedDraftArguments("create_project_zip", zipIntegrityResult.violations);
               } else {
                 const { toolResult: zipToolResult, zipHtml } = handleCreateProjectZipCall(toolCall.function.arguments);
                 toolResult = zipToolResult;
@@ -1050,7 +994,6 @@ app.post("/chat", rateLimitChat, async (req, res) => {
               if (!pdfIntegrityResult.passed) {
                 console.error("create_pdf: FAILED integrity check (before build):", pdfIntegrityResult.violations);
                 toolResult = JSON.stringify({ error: `This draft has a real accuracy problem that must be fixed before it can be delivered: ${pdfIntegrityResult.violations} Please regenerate the PDF with this fixed.` });
-                toolCall.function.arguments = compactRejectedDraftArguments("create_pdf", pdfIntegrityResult.violations);
               } else {
                 const { toolResult: pdfToolResult, pdfHtml } = handleCreatePdfCall(toolCall.function.arguments);
                 toolResult = pdfToolResult;
@@ -1065,7 +1008,6 @@ app.post("/chat", rateLimitChat, async (req, res) => {
               if (!latexIntegrityResult.passed) {
                 console.error("create_latex_pdf: FAILED integrity check (before compile):", latexIntegrityResult.violations);
                 toolResult = JSON.stringify({ error: `This draft has a real accuracy problem that must be fixed before it can be delivered: ${latexIntegrityResult.violations} Please regenerate the LaTeX with this fixed.` });
-                toolCall.function.arguments = compactRejectedDraftArguments("create_latex_pdf", latexIntegrityResult.violations);
               } else {
                 const { toolResult: latexPdfToolResult, latexPdfHtml } = await handleCreateLatexPdfCall(toolCall.function.arguments);
                 toolResult = latexPdfToolResult;
@@ -1127,7 +1069,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
 
           const lastToolName = responseMessage.tool_calls[responseMessage.tool_calls.length - 1]?.function?.name;
           sendEvent({ status: TOOL_REVIEW_LABELS[lastToolName] || pickPhaseWord(REVIEW_PHASE_WORDS) });
-          aiResponse = await createChatCompletionWithRateLimitRetry({
+          aiResponse = await openai.chat.completions.create({
             model: chatModel,
             messages,
             tools, // kept available every round -- lets the model chain a further tool call (e.g. fetch_web_page after search_web) instead of being cut off after one batch
@@ -1156,7 +1098,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
             role: "system",
             content: "You were not able to finish this within the available rounds (e.g. a document kept failing an accuracy check and needed more regeneration attempts than fit this turn). No tools are available in this final response. Be honest and clear that the file could not be completed successfully this turn, briefly say why if you know (e.g. it kept needing corrections), and ask the person to send the same request again to retry -- do not claim a file was produced or is on its way if it wasn't actually created.",
           });
-          aiResponse = await createChatCompletionWithRateLimitRetry({ model: chatModel, messages, ...reasoningModelExtraParams });
+          aiResponse = await openai.chat.completions.create({ model: chatModel, messages, ...reasoningModelExtraParams });
           responseMessage = aiResponse.choices[0].message;
         }
 
