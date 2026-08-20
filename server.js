@@ -418,7 +418,18 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // violation message back into the conversation. Reduced to leave
     // real margin below the confirmed real limit, not just under the
     // theoretical model maximum.
-    const reasoningModelExtraParams = chatModel === "o3" ? { max_completion_tokens: 24000 } : {};
+    // A confirmed real bug this fixes, a second time: the previous
+    // reduction to 24000 still hit the same real account limit --
+    // "Limit 30000, Requested 30149" -- because this cap only bounds
+    // the OUTPUT side, while the account's real 30000 TPM ceiling
+    // counts input + output TOGETHER. On a RETRY specifically (after
+    // the integrity checker rejects a draft), the input side itself
+    // grows substantially -- the full previous draft plus the
+    // violation message plus a fresh request all get resent -- eating
+    // into the same budget from the other direction. Reduced further
+    // to leave real margin for that larger retry-round input, not just
+    // for the output alone.
+    const reasoningModelExtraParams = chatModel === "o3" ? { max_completion_tokens: 18000 } : {};
     // images (optional): an ARRAY of base64 data URLs for one or more
     // images the user attached -- passed through as image_url blocks in
     // OpenAI's vision input format further below.
