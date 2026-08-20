@@ -48,7 +48,7 @@ import { getRenderChartToolDefinition, handleRenderChartCall } from "./chartTool
 import { getCreateProjectZipToolDefinition, handleCreateProjectZipCall } from "./projectZipTool.js";
 import { getCreatePdfToolDefinition, handleCreatePdfCall } from "./pdfTool.js";
 import { getCreateLatexPdfToolDefinition, handleCreateLatexPdfCall } from "./latexPdfTool.js";
-import { generateDocumentWithClaude } from "./claudeDocumentGenerator.js";import { convertLinksToHTML, formatMarkdownToHTML } from "./textFormatting.js";
+import { convertLinksToHTML, formatMarkdownToHTML } from "./textFormatting.js";
 import {
   instituteData,
   SPOKEN_LANGUAGE_KEY_TO_NAME,
@@ -64,7 +64,6 @@ import {
   detectForcedChartRequest,
   detectForcedWebSearch,
   detectLongFormDocumentRequest,
-  detectRequestedDocumentFormat,
 } from "./toolDetectors.js";
 import {
   retrieveCybersecurityKnowledge,
@@ -371,58 +370,18 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // already fixed for hard reasoning problems.
     const isLongFormDocRequest = detectLongFormDocumentRequest(message);
 
-    // PILOT: long-form document requests (research papers/reports via
-    // create_pdf/create_project_zip/create_latex_pdf) now route through
-    // Claude instead of OpenAI entirely for this turn -- per explicit
-    // request, after this exact task repeatedly hit the same two
-    // failures under o3 (fabricated "real" results, citations reused
-    // from an unrelated earlier topic) even after several rounds of
-    // increasingly specific fixes. Scoped deliberately narrow: only
-    // this detected request type is affected, every other mode/request
-    // keeps using OpenAI exactly as before. Returns early -- the rest
-    // of this handler's OpenAI-specific logic below is skipped entirely
-    // for this turn, since generateDocumentWithClaude already produced
-    // a complete answer (including, when successful, the same
-    // marker-div HTML the OpenAI flow's create_pdf/create_project_zip/
-    // create_latex_pdf handlers produce, so the frontend renders it
-    // identically either way with zero changes needed there).
-    if (isLongFormDocRequest) {
-      console.log(`CLAUDE_DOCUMENT_PATH: request detected as long-form document. ANTHROPIC_API_KEY present: ${!!process.env.ANTHROPIC_API_KEY}`);
-    }
-    if (isLongFormDocRequest && process.env.ANTHROPIC_API_KEY) {
-      try {
-        console.log("CLAUDE_DOCUMENT_PATH: attempting a document request via Claude.");
-        sendEvent({ status: "Working through your document" });
-        const requestedFormat = detectRequestedDocumentFormat(message);
-        const { text: claudeAnswer, docHtml } = await generateDocumentWithClaude(message, requestedFormat, sendEvent);
-        if (docHtml) {
-          console.log("CLAUDE_DOCUMENT_PATH: SUCCESS -- a real document was produced and will be delivered.");
-        } else {
-          // A confirmed real gap this fixes: Claude can complete
-          // without throwing an error at all, yet never actually call
-          // a document tool successfully (e.g. it ran out of its
-          // round budget, or just answered in text) -- from the
-          // outside this looks identical to "nothing happened", not
-          // an error, so it was never distinctly logged before. Falls
-          // through to the OpenAI flow below the same as a real
-          // failure would, since the person still needs an actual
-          // file either way.
-          console.error("CLAUDE_DOCUMENT_PATH: completed WITHOUT error but produced NO document (docHtml is null) -- falling back to the existing OpenAI flow for this turn.");
-          throw new Error("Claude path completed without producing a document.");
-        }
-        sendEvent({ status: getFinalizeStatusLabel(mode) });
-        let claudeFormattedReply = convertLinksToHTML(formatMarkdownToHTML(claudeAnswer || ""));
-        claudeFormattedReply += docHtml;
-        sendEvent({ done: true, reply: claudeFormattedReply, raw_reply: claudeAnswer || "", extracted_document_text: null });
-        res.end();
-        return;
-      } catch (err) {
-        console.error("CLAUDE_DOCUMENT_PATH: FAILED --", err.message, "-- falling back to the existing OpenAI flow for this turn.");
-        // Deliberately falls through to the normal OpenAI flow below
-        // rather than failing the whole request -- a real, working
-        // (if not-yet-improved) answer beats none at all.
-      }
-    }
+    // Claude was piloted here for long-form documents, then removed
+    // entirely per explicit request -- real usage cost (Opus 5, then
+    // Sonnet 5) burned through real credit faster than the pipeline
+    // could be debugged reliably, and repeated real bugs (crashes,
+    // silent non-completion, rate limits) made it more expensive and
+    // less predictable than just using OpenAI directly. All document
+    // generation now goes straight to the existing, already-working
+    // OpenAI/o3 flow below, unconditionally -- no Anthropic API calls,
+    // no ANTHROPIC_API_KEY dependency, no Claude-specific code path
+    // left active. If Claude is ever reconsidered later, the removed
+    // logic is preserved in git history rather than deleted from
+    // existence.
 
     const chatModel = (mode === "science" || isLongFormDocRequest)
       ? "o3"
@@ -587,10 +546,12 @@ app.post("/chat", rateLimitChat, async (req, res) => {
             {
               role: "system",
               content:
-                "You are a strict academic-integrity checker for a generated research document. Check the document text below for exactly two specific violations: " +
-                "(1) FABRICATED REAL-WORLD RESULTS: does it claim a specific real experiment, deployment, field trial, or user study was actually conducted (e.g. naming a specific number of participants, households, rooms, devices, testbeds, or a specific time duration) and then present specific numeric 'results' as if genuinely measured from it? Proposed/future evaluation plans, clearly framed as not-yet-conducted, are FINE and not a violation. " +
+                "You are a strict academic-integrity checker for a generated research document. Check the document text below for exactly FOUR specific violations -- these are checked here in code, not left to the writer's own prompt instructions, specifically because two of them (3 and 4 below) kept recurring even after repeated, increasingly explicit prompt-only attempts to fix them, the same way violations 1 and 2 originally did: " +
+                "(1) FABRICATED REAL-WORLD RESULTS: does it claim a specific real experiment, deployment, field trial, or user study was actually conducted (e.g. naming a specific number of participants, households, rooms, devices, testbeds, or a specific time duration) and then present specific numeric 'results' as if genuinely measured from it? Proposed/future evaluation plans, or results explicitly framed as from a SIMULATION/analytical model (not a real physical deployment), are FINE and not a violation. " +
                 "(2) OFF-TOPIC REFERENCES: does the references list include any citation whose real subject matter is clearly unrelated to this document's own actual topic (e.g. a citation about drones/UAVs/propulsion appearing in a paper about an unrelated subject)? " +
-                "Respond with ONLY a JSON object: {\"passed\": true} if neither violation is present, or {\"passed\": false, \"violations\": \"<specific description of exactly what's wrong and where, so it can be fixed>\"} if either is present. No other text.",
+                "(3) NO STANDALONE ETHICS SECTION: if the document's topic genuinely involves people, personal data, AI systems, or societal impact, is there a real section with a heading actually containing the word 'Ethics' or 'Ethical' (e.g. 'Ethics', 'Ethical Considerations')? A different section that only touches on related themes (e.g. 'Regulatory Alignment', 'Socio-Technical Governance', 'Policy Implications') does NOT satisfy this -- it must be its own explicitly-labeled section. If the topic genuinely has no meaningful ethical dimension (e.g. a pure math proof), this check does not apply. " +
+                "(4) NON-ACADEMIC REFERENCES: does the references list include any blog post, LinkedIn article/post, or other social-media/non-peer-reviewed, non-archival source presented as if it were a formal academic citation? Real journals, conference proceedings (including posters), arXiv preprints, and official regulatory/standards documents are all fine -- company blogs, LinkedIn posts, and similar are not. " +
+                "Respond with ONLY a JSON object: {\"passed\": true} if none of these four violations are present, or {\"passed\": false, \"violations\": \"<specific description of exactly what's wrong and where, so it can be fixed>\"} if any are present. No other text.",
             },
             { role: "user", content: fullText.slice(0, 12000) },
           ],
