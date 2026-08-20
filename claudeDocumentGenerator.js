@@ -112,28 +112,55 @@ export async function generateDocumentWithClaude(userMessage, requestedFormat, s
 
   while (round < MAX_ROUNDS) {
     round++;
-    const response = await anthropic.messages.create({
-      model: CLAUDE_DOC_MODEL,
-      // A confirmed real bug this fixes: Claude Opus 5 has adaptive
-      // thinking enabled by default, and (per Anthropic's own current
-      // documentation) thinking tokens now count against the SAME
-      // output budget as max_tokens -- the same root cause already
-      // fixed for OpenAI's o3 earlier in this system (reasoning tokens
-      // eating the whole budget before any real output). At 8000
-      // tokens, Claude was very likely spending its entire budget on
-      // internal reasoning about how to structure a demanding
-      // multi-section academic paper, then running out before it ever
-      // emitted the actual tool call -- matching the exact observed
-      // symptom (completed without error, but never called a document
-      // tool at all). Opus 5 supports up to 128,000 tokens per
-      // response; 32000 gives real room for both adaptive thinking and
-      // a large tool call's JSON arguments without being wastefully
-      // high.
-      max_tokens: 32000,
-      system: CLAUDE_DOC_SYSTEM_PROMPT,
-      messages,
-      tools,
-    });
+    // KEEPALIVE HEARTBEAT -- a confirmed real bug this fixes: a
+    // single Claude call, given real room to think and generate for a
+    // demanding multi-section paper, can legitimately run for several
+    // minutes -- and during that whole wait, this function was
+    // sending NOTHING back over the connection. That silence is very
+    // likely what caused the entire service to be killed and
+    // restarted mid-request (Render's own boot-up log appeared a few
+    // minutes into a request with no prior outcome ever logged) --
+    // consistent with a platform-level idle-connection timeout, not
+    // an error in the Claude call itself. Sending a lightweight real
+    // status event periodically WHILE waiting keeps the connection
+    // visibly alive with fresh data the whole time, rather than
+    // trying to guess a "safe enough" max_tokens number that still
+    // risks the same failure on an even harder request.
+    let heartbeatCount = 0;
+    const heartbeat = sendEvent
+      ? setInterval(() => {
+          heartbeatCount++;
+          sendEvent({ status: `Still working on your document (round ${round}, ${heartbeatCount * 15}s)...` });
+        }, 15000)
+      : null;
+
+    let response;
+    try {
+      response = await anthropic.messages.create({
+        model: CLAUDE_DOC_MODEL,
+        // A confirmed real bug this fixes: Claude Opus 5 has adaptive
+        // thinking enabled by default, and (per Anthropic's own current
+        // documentation) thinking tokens now count against the SAME
+        // output budget as max_tokens -- the same root cause already
+        // fixed for OpenAI's o3 earlier in this system (reasoning tokens
+        // eating the whole budget before any real output). At 8000
+        // tokens, Claude was very likely spending its entire budget on
+        // internal reasoning about how to structure a demanding
+        // multi-section academic paper, then running out before it ever
+        // emitted the actual tool call -- matching the exact observed
+        // symptom (completed without error, but never called a document
+        // tool at all). Opus 5 supports up to 128,000 tokens per
+          // response; 32000 gives real room for both adaptive thinking and
+        // a large tool call's JSON arguments without being wastefully
+        // high.
+        max_tokens: 32000,
+        system: CLAUDE_DOC_SYSTEM_PROMPT,
+        messages,
+        tools,
+      });
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
+    }
 
     const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
     const textBlocks = response.content.filter((b) => b.type === "text");
