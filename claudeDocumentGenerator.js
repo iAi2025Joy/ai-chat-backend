@@ -107,7 +107,19 @@ export async function generateDocumentWithClaude(userMessage, requestedFormat, s
 
   let docHtml = null;
   let finalText = "";
-  const MAX_ROUNDS = 10; // document generation genuinely needs more real rounds than a typical chat turn -- searching real references, then the actual document call
+  // A confirmed real bug this fixes: at MAX_ROUNDS=10, a real
+  // multi-round request (several web searches plus the actual
+  // document draft) caused the whole service to crash and restart
+  // partway through -- with no graceful error ever logged, consistent
+  // with an out-of-memory kill rather than a normal failure. Each
+  // round's full response and search results get appended to the
+  // conversation and resent on every subsequent call, so the real
+  // memory footprint compounds with every additional round on top of
+  // Render's free tier's 512MB ceiling. Reduced to a more conservative
+  // budget that still allows real research (a couple of searches) plus
+  // the actual document call, without letting the accumulated
+  // conversation grow unbounded.
+  const MAX_ROUNDS = 6;
   let round = 0;
 
   while (round < MAX_ROUNDS) {
@@ -136,6 +148,25 @@ export async function generateDocumentWithClaude(userMessage, requestedFormat, s
 
     let response;
     try {
+      // FORCE A TOOL CALL ON LATER ROUNDS -- a confirmed real bug this
+      // fixes: given a genuinely demanding request, Claude used its
+      // entire round budget (up to 10 rounds, ~7.5 minutes) without
+      // EVER once calling a document tool -- free to choose, it kept
+      // researching/drafting in plain text indefinitely instead of
+      // committing to the actual deliverable. Rather than trust more
+      // time or more tokens to eventually produce a tool call on its
+      // own, this structurally forces the issue: once only a couple of
+      // rounds remain AND no document has been produced yet, tool
+      // choice switches from free ("auto") to "any" (must call SOME
+      // real tool this round -- web_search is still a valid choice if
+      // it genuinely needs one more search, but a text-only reply is
+      // no longer an option). Never forced once a document has already
+      // been successfully produced (docHtml set), so Claude still gets
+      // a real, unconstrained final round to write its closing context
+      // sentence without being forced into a second, unwanted tool call.
+      const roundsRemaining = MAX_ROUNDS - round + 1;
+      const shouldForceToolCall = !docHtml && roundsRemaining <= 2;
+
       response = await anthropic.messages.create({
         model: CLAUDE_DOC_MODEL,
         // A confirmed real bug this fixes: Claude Opus 5 has adaptive
@@ -150,13 +181,18 @@ export async function generateDocumentWithClaude(userMessage, requestedFormat, s
         // emitted the actual tool call -- matching the exact observed
         // symptom (completed without error, but never called a document
         // tool at all). Opus 5 supports up to 128,000 tokens per
-          // response; 32000 gives real room for both adaptive thinking and
-        // a large tool call's JSON arguments without being wastefully
-        // high.
-        max_tokens: 32000,
+        // response; 16000 gives real room for both adaptive thinking
+        // and a large tool call's JSON arguments while being more
+        // conservative than the full 32000 tried previously -- that
+        // higher value fixed the original "no tool call at all" bug,
+        // but is also a real contributor to the memory growth behind
+        // the crash described above, alongside the reduced round
+        // count.
+        max_tokens: 16000,
         system: CLAUDE_DOC_SYSTEM_PROMPT,
         messages,
         tools,
+        ...(shouldForceToolCall ? { tool_choice: { type: "any" } } : {}),
       });
     } finally {
       if (heartbeat) clearInterval(heartbeat);
