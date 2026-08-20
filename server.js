@@ -926,13 +926,35 @@ app.post("/chat", rateLimitChat, async (req, res) => {
       // prompt's own "ALWAYS CALL PREDICTION TOOLS FRESH" rule.
       const forcedToolName = detectForcedPredictionTool(message) || detectForcedImageSearch(message) || detectForcedChartRequest(message) || detectForcedWebSearch(message);
 
+      // A confirmed real bug this fixes: detectLongFormDocumentRequest()
+      // (above, where isLongFormDocRequest is set) already upgrades the
+      // model to o3 for a detected long-form document/paper request, but
+      // NOTHING was forcing an actual document tool call -- with
+      // tool_choice left as the default "auto", the model was still free
+      // to just answer inline in chat instead of calling create_pdf /
+      // create_project_zip / create_latex_pdf. That's a real, separate
+      // failure mode from the o3-capacity bug the model upgrade already
+      // fixed: a plain-chat answer completely bypasses
+      // checkDocumentIntegrity() (which only runs inside those three
+      // tool-call branches), AND bypasses the MATCH THE REAL DEPTH/LENGTH
+      // checklist actually being enforced with any teeth, since there's
+      // no tool-call commitment forcing the model to produce the full
+      // structured output rather than a short inline draft. Forcing
+      // tool_choice: "required" (not a specific tool name, since which of
+      // the three document tools fits is the model's call, same as
+      // detectRequestedDocumentFormat's own intent) guarantees SOME real
+      // tool gets called for a detected long-form request, which routes
+      // the response through checkDocumentIntegrity() and the full
+      // document pipeline instead of silently downgrading to a chat reply.
       let aiResponse = await createChatCompletionWithRateLimitRetry({
         model: chatModel,
         messages,
         tools,
         ...(forcedToolName
           ? { tool_choice: { type: "function", function: { name: forcedToolName } } }
-          : {}),
+          : isLongFormDocRequest
+            ? { tool_choice: "required" }
+            : {}),
         ...reasoningModelExtraParams,
       });
 
