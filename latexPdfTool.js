@@ -130,7 +130,16 @@ export async function handleCreateLatexPdfCall(argsJson) {
     };
   }
 
-  const pdfBuffer = await compileResponse.buffer();
+  // A confirmed real bug this fixes: used .buffer() here, a node-fetch
+  // v2-only convenience method -- this project runs node-fetch v3 (see
+  // package.json), which removed it in favor of the standard
+  // .arrayBuffer(). Every real LaTeX compile that actually succeeded
+  // was crashing right here with "compileResponse.buffer is not a
+  // function", right after the hard part (the actual compile) had
+  // already worked -- confirmed directly from a real server stack
+  // trace, not inferred.
+  const arrayBuffer = await compileResponse.arrayBuffer();
+  const pdfBuffer = Buffer.from(arrayBuffer);
   const base64Pdf = pdfBuffer.toString("base64");
 
   const payload = { title: title.trim(), base64Pdf };

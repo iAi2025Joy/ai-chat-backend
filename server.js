@@ -451,7 +451,15 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // -- set generously high specifically for o3 so a large document
     // has real room to complete, while gpt-4o/gpt-4o-mini elsewhere
     // keep using OpenAI's own default (unset), unaffected by this.
-    const reasoningModelExtraParams = chatModel === "o3" ? { max_completion_tokens: 32000 } : {};
+    // A confirmed real bug this fixes: a real server error showed
+    // OpenAI rejecting a request with "Limit 30000, Requested 30163"
+    // -- your actual account's real per-minute token ceiling for o3 is
+    // 30000, and 32000 here could exceed it, especially once an
+    // integrity-check retry adds the original draft plus the
+    // violation message back into the conversation. Reduced to leave
+    // real margin below the confirmed real limit, not just under the
+    // theoretical model maximum.
+    const reasoningModelExtraParams = chatModel === "o3" ? { max_completion_tokens: 24000 } : {};
     // images (optional): an ARRAY of base64 data URLs for one or more
     // images the user attached -- passed through as image_url blocks in
     // OpenAI's vision input format further below.
