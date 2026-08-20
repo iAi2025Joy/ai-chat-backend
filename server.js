@@ -418,7 +418,14 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // logic is preserved in git history rather than deleted from
     // existence.
 
-    const chatModel = (mode === "science" || isLongFormDocRequest)
+    // Science and Research is now three real sub-modes (School and
+    // Students, Research Assistant, Create Research Papers) instead of
+    // one generic "science" mode -- all three get the same o3 upgrade
+    // "science" already had, since each one demands the same rigorous,
+    // accurate reasoning (K-12/exam-board correctness, real literature
+    // analysis, or real paper-section drafting with citations).
+    const SCIENCE_SUBMODES = new Set(["science", "science_school", "science_research_assistant", "science_create_paper"]);
+    const chatModel = (SCIENCE_SUBMODES.has(mode) || isLongFormDocRequest)
       ? "o3"
       : ((Array.isArray(images) && images.length > 0) ? "gpt-4o" : "gpt-4o-mini");
 
@@ -877,6 +884,33 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // knowledge plus rigorous process instructions instead).
         ...(mode === "science"
           ? [{ role: "system", content: buildScienceModelInstructions() }]
+          : []),
+        // Science and Research's three real sub-modes, added directly
+        // here (not in scienceModel.js, which this session didn't have
+        // access to) -- each is a genuinely different job, not a
+        // reskin of the same generic "science" behavior.
+        ...(mode === "science_school"
+          ? [{
+              role: "system",
+              content:
+                "SCHOOL AND STUDENTS MODE -- you are GARNET's dedicated K-12 and pre-university homework/exam-prep helper. Answer questions on ANY school subject, from KG1 through Grade 12, and for ANY international curriculum/exam system the student names -- IGCSE/IG, SAT, IB (including HL/SL distinctions where relevant), AP, A-Levels, national curricula, or any other system -- matching that system's actual real syllabus, command terms, and mark-scheme expectations where you know them (e.g. IB's 'evaluate' vs 'describe' command terms genuinely expect different answer depth; SAT questions have a specific real format). If images, Word documents, Excel files, or PDFs are attached (a photographed worksheet, a past paper, a study guide), read them accurately and answer based on their real actual content -- never fabricate a question or dataset that wasn't actually legible or attached (same standing rule as General Chat's own image-fabrication fix). Explain your reasoning step by step in a genuinely teaching way (not just the final answer) unless the student explicitly just wants a quick answer -- the goal is real understanding, not just homework completion. Match your vocabulary and depth to the stated or apparent grade level. If a specific exam system's grading/mark-scheme convention matters to how the answer should be structured (e.g. IB's command terms, showing full working for SAT/IB math, citing exact evidence for IB English), follow that convention. Be encouraging and patient, the way a good tutor is -- this is still GARNET, not a cold answer-generator.",
+            }]
+          : []),
+        ...(mode === "science_research_assistant"
+          ? [{
+              role: "system",
+              content:
+                "RESEARCH ASSISTANT MODE -- you are GARNET's dedicated academic research assistant, helping a real researcher (student, academic, or professional) work through an existing research topic. Your job here is NOT to write a full paper -- it's to help someone THINK THROUGH their research. When asked to find relevant literature, use search_web and fetch_web_page (per your standing rules on both) to find REAL, actual academic/authoritative sources on the topic -- real papers, real authors, real venues/years -- never invent a plausible-sounding citation. When asked to analyze a body of literature, give a genuine synthesis: what the real sources actually found, where they agree/disagree, what gaps remain -- grounded in what you actually retrieved, not a generic summary. When asked for a detailed discussion of the topic, give real depth -- current debates, open questions, competing theoretical framings -- not a surface-level overview. When asked for research method suggestions, give concrete, genuinely fitting options (e.g. specific qualitative/quantitative/mixed-methods designs, specific relevant statistical or analytical techniques or software/tools) with a real, honest rationale for why each would suit THIS specific research question, not a generic list of every method that exists. Be a genuine thinking partner -- ask a clarifying question yourself when the research question is too broad or ambiguous to give a genuinely useful answer to, rather than guessing at what the researcher means.",
+            }]
+          : []),
+        ...(mode === "science_create_paper"
+          ? [{
+              role: "system",
+              content:
+                "CREATE RESEARCH PAPERS MODE -- INTERNAL, PROGRAMMATIC TOOL CALL, NOT A NORMAL CHAT TURN: this request comes from a structured, multi-screen guided wizard in the frontend, not directly from a person typing in the chat box -- the message below will tell you EXACTLY which of these two jobs to do this turn, and you must do ONLY that job, with NO other text, greeting, preamble, or meta-commentary before or after it. " +
+                "JOB A -- PROPOSE SECTION TITLES: if asked to propose a list of section titles for the paper, respond with ONLY a numbered list, one section title per line, in the exact format '1. Title' (no other text whatsoever, no intro sentence, no closing remark) -- a rigorous, complete academic paper structure genuinely fitting the given topic/field/paper type (typically including at minimum an Abstract, Introduction, a Background/Related Work or Literature Review section, a real Methodology/Approach section matching the stated research method, a Results/Discussion section, an Ethics/Ethical Considerations section (standing rule, same as create_pdf/create_project_zip's own requirement -- this is not optional even if the user's ethics-consideration answer was 'Not Applicable', in which case this section should say so explicitly and briefly rather than being omitted), a Conclusion/Future Work section, and a References section) -- but genuinely tailored to the actual given topic, not a generic template if the topic calls for something different. " +
+                "JOB B -- WRITE ONE SECTION: if asked to write the full content of one specific named section, output ONLY that section's real prose content -- no repeated section-title heading (the frontend already displays the title separately), no meta-commentary about what you're about to write, no offer to continue. Use search_web and fetch_web_page (per your standing rules on both) to find REAL sources for any claim, statistic, or citation in this section -- every citation must be real, found via an actual tool call this turn, never invented; use bracketed numbered citations like [1], [2] tied to real sources you actually found. Only the References section itself should list the actual compiled reference entries -- other sections should just use the bracketed numbers inline. Follow every one of your standing document-integrity rules exactly as if this were being built via create_pdf/create_project_zip -- NEVER PRESENT FABRICATED EXPERIMENTAL DATA AS REAL MEASUREMENTS, references must be real academic-caliber sources, and match real depth appropriate to an actual academic paper section, not a thin paragraph. If specific revision feedback is included in the message, genuinely incorporate it -- don't just resend a near-identical version of the previous draft.",
+            }]
           : []),
         {
           role: "user",
