@@ -386,19 +386,38 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // marker-div HTML the OpenAI flow's create_pdf/create_project_zip/
     // create_latex_pdf handlers produce, so the frontend renders it
     // identically either way with zero changes needed there).
+    if (isLongFormDocRequest) {
+      console.log(`CLAUDE_DOCUMENT_PATH: request detected as long-form document. ANTHROPIC_API_KEY present: ${!!process.env.ANTHROPIC_API_KEY}`);
+    }
     if (isLongFormDocRequest && process.env.ANTHROPIC_API_KEY) {
       try {
+        console.log("CLAUDE_DOCUMENT_PATH: attempting a document request via Claude.");
         sendEvent({ status: "Working through your document" });
         const requestedFormat = detectRequestedDocumentFormat(message);
         const { text: claudeAnswer, docHtml } = await generateDocumentWithClaude(message, requestedFormat, sendEvent);
+        if (docHtml) {
+          console.log("CLAUDE_DOCUMENT_PATH: SUCCESS -- a real document was produced and will be delivered.");
+        } else {
+          // A confirmed real gap this fixes: Claude can complete
+          // without throwing an error at all, yet never actually call
+          // a document tool successfully (e.g. it ran out of its
+          // round budget, or just answered in text) -- from the
+          // outside this looks identical to "nothing happened", not
+          // an error, so it was never distinctly logged before. Falls
+          // through to the OpenAI flow below the same as a real
+          // failure would, since the person still needs an actual
+          // file either way.
+          console.error("CLAUDE_DOCUMENT_PATH: completed WITHOUT error but produced NO document (docHtml is null) -- falling back to the existing OpenAI flow for this turn.");
+          throw new Error("Claude path completed without producing a document.");
+        }
         sendEvent({ status: getFinalizeStatusLabel(mode) });
         let claudeFormattedReply = convertLinksToHTML(formatMarkdownToHTML(claudeAnswer || ""));
-        if (docHtml) claudeFormattedReply += docHtml;
+        claudeFormattedReply += docHtml;
         sendEvent({ done: true, reply: claudeFormattedReply, raw_reply: claudeAnswer || "", extracted_document_text: null });
         res.end();
         return;
       } catch (err) {
-        console.error("generateDocumentWithClaude failed, falling back to the existing OpenAI flow for this turn:", err.message);
+        console.error("CLAUDE_DOCUMENT_PATH: FAILED --", err.message, "-- falling back to the existing OpenAI flow for this turn.");
         // Deliberately falls through to the normal OpenAI flow below
         // rather than failing the whole request -- a real, working
         // (if not-yet-improved) answer beats none at all.
