@@ -1596,7 +1596,24 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // so the frontend's existing handling (and its own auto-retry logic)
     // doesn't need special-casing for this path.
     try {
-      sendEvent({ done: true, reply: "⚠️ Server error. Please try again later.", raw_reply: "", error: true });
+      // TEMPORARY DEBUG ADDITION -- surfaces the real error message and
+      // the first line of its stack directly in the response, visible
+      // in the browser's Network tab (Response), specifically because
+      // Render's own log dashboard delivery has proven completely
+      // unreliable tonight (real, confirmed server-side activity --
+      // this exact catch block firing -- produced zero visible log
+      // lines across many repeated, verified-live attempts). This is a
+      // real security/information-exposure downgrade (a generic
+      // message is the correct default for real users) -- remove this
+      // debug_error field and revert to the plain generic message once
+      // the real cause is identified, do not ship this long-term.
+      sendEvent({
+        done: true,
+        reply: "⚠️ Server error. Please try again later.",
+        raw_reply: "",
+        error: true,
+        debug_error: `${err && err.message ? err.message : String(err)} | ${err && err.stack ? err.stack.split("\n")[1] : ""}`,
+      });
     } catch (writeErr) {
       console.error("Failed to send SSE error event:", writeErr.message);
     }
