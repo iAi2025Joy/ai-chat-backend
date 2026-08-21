@@ -418,16 +418,25 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // logic is preserved in git history rather than deleted from
     // existence.
 
-    // Science and Research is now three real sub-modes (School and
-    // Students, Research Assistant, Create Research Papers) instead of
-    // one generic "science" mode -- all three get the same o3 upgrade
-    // "science" already had, since each one demands the same rigorous,
-    // accurate reasoning (K-12/exam-board correctness, real literature
-    // analysis, or real paper-section drafting with citations).
-    const SCIENCE_SUBMODES = new Set(["science", "science_school", "science_research_assistant", "science_create_paper"]);
-    const chatModel = (SCIENCE_SUBMODES.has(mode) || isLongFormDocRequest)
+    // Science and Research's three sub-modes -- Research Assistant and
+    // Create Research Papers stay on o3 (real literature analysis and
+    // real paper-section drafting with citations both genuinely benefit
+    // from o3's more rigorous, multi-step reasoning). School and
+    // Students was moved OFF o3 per explicit, confirmed real feedback:
+    // even a simple, no-search-needed question (e.g. "explain Newton's
+    // laws of motion") was taking noticeably long -- o3's own inherent
+    // per-call reasoning latency, not wasted tool calls, since this
+    // mode's own system prompt only asks it to search for specific
+    // national/regional exam-system past papers, not for ordinary
+    // content questions. gpt-4o responds meaningfully faster and is
+    // still genuinely capable for the great majority of K-12/exam-prep
+    // questions -- the real, honest tradeoff is somewhat less rigorous
+    // step-by-step reasoning on the hardest multi-part problems, a
+    // deliberate speed-for-depth choice made for this mode specifically.
+    const O3_SCIENCE_SUBMODES = new Set(["science", "science_research_assistant", "science_create_paper"]);
+    const chatModel = (O3_SCIENCE_SUBMODES.has(mode) || isLongFormDocRequest)
       ? "o3"
-      : ((Array.isArray(images) && images.length > 0) ? "gpt-4o" : "gpt-4o-mini");
+      : ((mode === "science_school" || (Array.isArray(images) && images.length > 0)) ? "gpt-4o" : "gpt-4o-mini");
 
     // A confirmed real bug this fixes: asked for a large, detailed
     // multi-page PDF, GARNET's own preamble text confidently promised a
