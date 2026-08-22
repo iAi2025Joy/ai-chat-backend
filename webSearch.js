@@ -26,7 +26,7 @@
 // as thin as Serper's snippets always were, so fetch_web_page below
 // still does the same job it always did for those.
 
-import { performFallbackSearch } from "./searchProviders.js";
+import { performFallbackSearch, searchImagesSerpApi } from "./searchProviders.js";
 
 const SERPER_API_KEY = process.env.SERPER_API_KEY || "";
 
@@ -134,19 +134,17 @@ export async function handleWebSearchCall(argsJson) {
   }
 }
 
+
 // ------------------------------------------------------------------
-// IMAGE SEARCH -- STILL ON SERPER ONLY, READ BEFORE RELYING ON THIS:
-// none of the six providers wired into searchProviders.js for regular
-// text search (performWebSearch above) currently implement image
-// search -- extending the fallback chain to cover search_web_images
-// too is real, separate work that hasn't been done yet. This function
-// is UNCHANGED from before and still depends entirely on
-// SERPER_API_KEY -- if that account's balance is still negative (as of
-// this session), search_web_images will keep failing until either
-// Serper is topped up, or a provider with a real image-search endpoint
-// (Bright Data and SerpApi both plausibly have one -- worth checking)
-// is added to searchProviders.js and wired in here the same way
-// performWebSearch above now uses performFallbackSearch.
+// IMAGE SEARCH -- Serper first, SerpApi as fallback. Serper's Images
+// endpoint stays the primary path (same account, same key already in
+// use), but now falls through to SerpApi's dedicated google_images
+// engine (via searchImagesSerpApi in searchProviders.js) if Serper
+// fails for any reason -- missing key, non-2xx response, or that
+// negative balance from earlier this session. Bright Data plausibly
+// also has an image-search-capable endpoint worth adding here later,
+// but SerpApi alone already gets this out of Serper's single point of
+// failure.
 //
 // Real image results via Serper's Images endpoint (same API key as the
 // regular web search above, same provider, just a different endpoint):
@@ -163,34 +161,42 @@ export async function handleWebSearchCall(argsJson) {
 // ------------------------------------------------------------------
 
 export async function performImageSearch(query, numResults = 8) {
-  if (!SERPER_API_KEY) {
-    throw new Error("SERPER_API_KEY is not set.");
+  try {
+    if (!SERPER_API_KEY) {
+      throw new Error("SERPER_API_KEY is not set.");
+    }
+
+    const response = await fetch("https://google.serper.dev/images", {
+      method: "POST",
+      headers: {
+        "X-API-KEY": SERPER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ q: query, num: numResults }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Serper Images API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    const results = (data.images || [])
+      .filter((img) => img.imageUrl && img.thumbnailUrl) // skip any malformed entries missing a real image
+      .map((img) => ({
+        title: img.title || "",
+        imageUrl: img.imageUrl,
+        thumbnailUrl: img.thumbnailUrl,
+        source: img.domain || img.source || "",
+        link: img.link || img.imageUrl,
+      }));
+
+    if (results.length === 0) throw new Error("Serper returned no usable image results.");
+    return results;
+  } catch (serperErr) {
+    console.error(`Serper image search failed, falling back to SerpApi: ${serperErr.message}`);
+    return await searchImagesSerpApi(query, numResults);
   }
-
-  const response = await fetch("https://google.serper.dev/images", {
-    method: "POST",
-    headers: {
-      "X-API-KEY": SERPER_API_KEY,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ q: query, num: numResults }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Serper Images API returned ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  return (data.images || [])
-    .filter((img) => img.imageUrl && img.thumbnailUrl) // skip any malformed entries missing a real image
-    .map((img) => ({
-      title: img.title || "",
-      imageUrl: img.imageUrl,
-      thumbnailUrl: img.thumbnailUrl,
-      source: img.domain || img.source || "",
-      link: img.link || img.imageUrl,
-    }));
 }
 
 export function getWebImageSearchToolDefinition() {

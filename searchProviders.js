@@ -276,4 +276,42 @@ export async function performFallbackSearch(query, options = {}) {
   throw new Error(`All search providers failed or are unavailable. Details -- ${errors.join(" | ")}`);
 }
 
+// ------------------------------------------------------------------
+// IMAGE SEARCH FALLBACK -- separate from the 6-provider text-search
+// fallback chain above, since not every provider has an image-search
+// endpoint. Currently only SerpApi's dedicated google_images engine is
+// wired in here (confirmed real schema via SerpApi's own docs:
+// images_results[].original is the full-resolution image URL,
+// .thumbnail the preview, .title/.source/.link the rest). Used by
+// webSearch.js's performImageSearch as a fallback when Serper itself
+// fails (e.g. its negative balance from earlier this session) -- same
+// normalized-shape idea as the text-search chain, matching what the
+// frontend's image gallery already expects: {title, imageUrl,
+// thumbnailUrl, source, link}.
+export async function searchImagesSerpApi(query, maxResults = 8) {
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) throw new Error("SERPAPI_KEY is not set.");
+  const url = `https://serpapi.com/search.json?engine=google_images&q=${encodeURIComponent(query)}&api_key=${apiKey}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`SerpApi (images) returned ${response.status}: ${body.slice(0, 200)}`);
+  }
+  const data = await response.json();
+  if (data.error) throw new Error(`SerpApi (images) error: ${data.error}`);
+  const items = data.images_results || [];
+  const results = items
+    .filter((img) => img.original && img.thumbnail) // skip any malformed entries missing a real image, same guard performImageSearch already applies to Serper's results
+    .slice(0, maxResults)
+    .map((img) => ({
+      title: img.title || "",
+      imageUrl: img.original,
+      thumbnailUrl: img.thumbnail,
+      source: img.source || "",
+      link: img.link || img.original,
+    }));
+  if (results.length === 0) throw new Error("SerpApi (images) returned no usable image results.");
+  return results;
+}
+
 export { PROVIDER_ORDER };
