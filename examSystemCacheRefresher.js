@@ -63,6 +63,11 @@ function getDb() {
   return admin.firestore();
 }
 
+// TEMPORARY DEBUG collection array -- see performTavilySearch and
+// runExamSystemCacheRefresh below. Remove once the real cause of the
+// missing content field is identified.
+let tavilyDebugLog = [];
+
 // Tavily's real Search API -- returns the same {results, answerBox}
 // shape the earlier Serper/Google-based versions of this file used,
 // so the rest of this file's logic didn't need to change, just the
@@ -100,6 +105,19 @@ async function performTavilySearch(query, maxResults = 5) {
     throw new Error(`Tavily API returned ${response.status}: ${body.slice(0, 200)}`);
   }
   const data = await response.json();
+  // TEMPORARY DEBUG COLLECTION -- records whether Tavily actually
+  // returned raw_content for each result, into a module-level array
+  // surfaced in the final HTTP response summary (NOT console.log --
+  // Render's own log delivery has proven unreliable all session; the
+  // response body is the channel that's actually worked reliably).
+  // Remove once the real cause is identified.
+  (data.results || []).forEach((item) => {
+    tavilyDebugLog.push({
+      title: (item.title || "").slice(0, 50),
+      rawContentPresent: !!item.raw_content,
+      rawContentLength: item.raw_content ? item.raw_content.length : 0,
+    });
+  });
   const results = (data.results || []).map((item) => ({
     title: item.title || "",
     link: item.url || "",
@@ -248,6 +266,7 @@ async function refreshInternationalSystemToday(examSystem) {
 // (see getTodaysRotationItem's own comment on how "today" is picked)
 // and returns a real summary for just that item.
 export async function runExamSystemCacheRefresh() {
+  tavilyDebugLog = []; // reset for this run
   const todaysItem = getTodaysRotationItem();
   console.log(`Today's rotation item: ${todaysItem.type === "country" ? todaysItem.country : todaysItem.examSystem} (${todaysItem.type})`);
 
@@ -261,6 +280,9 @@ export async function runExamSystemCacheRefresh() {
     succeeded: result.succeeded,
     skipped: result.skipped,
     failures: result.failures,
+    // TEMPORARY DEBUG field -- remove once the real cause of the
+    // missing content field is identified (see performTavilySearch).
+    tavilyRawContentDebug: tavilyDebugLog.slice(0, 15),
   };
   console.log(`Done. ${summary.succeeded} refreshed, ${summary.skipped} skipped/failed.`);
   return summary;
