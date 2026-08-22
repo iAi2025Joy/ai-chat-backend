@@ -2321,7 +2321,7 @@ app.get("/admin/test-search-providers", async (req, res) => {
     return res.status(401).json({ error: "Invalid or missing secret. Add ?secret=YOUR_EXAM_CACHE_REFRESH_SECRET to the URL." });
   }
 
-  const TEST_QUERY = "current weather in London";
+  const TEST_QUERY = "best pizza in New York";
   const results = {};
 
   async function tryProvider(name, fn) {
