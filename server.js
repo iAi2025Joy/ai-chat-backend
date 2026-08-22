@@ -2267,7 +2267,7 @@ app.post("/request-email-verification", handleRequestEmailVerification);
 // environment variable the same way OPENAI_API_KEY already is) rather
 // than left open for anyone who discovers the URL to trigger and burn
 // through OpenAI credits with. This can take several minutes for the
-// full seed list (60 entries x a couple of real search rounds each) --
+// single day's rotation item (10 entries x a couple of real search rounds each) --
 // GitHub Actions' own default job timeout is well beyond that, so no
 // special handling is needed on the caller's side beyond a reasonably
 // long request timeout.
