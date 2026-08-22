@@ -71,6 +71,20 @@ function getDb() {
 // within the free monthly budget. Tavily has no direct equivalent of
 // Serper's "answer box" -- answerBox is always null here, callers
 // already handle that gracefully by falling back to combined snippets.
+//
+// PER EXPLICIT REQUEST: now requests real extracted page content
+// (include_raw_content: "markdown"), not just the short snippet Tavily
+// returns by default -- a confirmed real gap this fixes: the cache was
+// only ever storing search-result METADATA (title, URL, a one-line
+// snippet), never the actual material itself, so a student's cached
+// "past paper" entry was really just a link to go read, the same
+// "here's where to look" problem already fixed elsewhere in School and
+// Students. Each result's rawContent is capped at 6,000 characters
+// (see gatherRealData below) -- Firestore's 1 MiB per-document limit
+// makes storing truly unlimited full-page text per entry unsafe, but
+// 6,000 characters is substantially more real, readable material than
+// a snippet while staying comfortably within that limit even with
+// several results per entry.
 async function performTavilySearch(query, maxResults = 5) {
   const apiKey = process.env.TAVILY_API_KEY1;
   if (!apiKey) {
@@ -79,7 +93,7 @@ async function performTavilySearch(query, maxResults = 5) {
   const response = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ query, search_depth: "basic", max_results: maxResults, include_answer: false }),
+    body: JSON.stringify({ query, search_depth: "basic", max_results: maxResults, include_answer: false, include_raw_content: "markdown" }),
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
@@ -90,34 +104,49 @@ async function performTavilySearch(query, maxResults = 5) {
     title: item.title || "",
     link: item.url || "",
     snippet: item.content || "",
+    rawContent: (item.raw_content || "").slice(0, 6000),
   }));
   return { results, answerBox: null };
 }
 
 // Merges a newly-found list of {title, url, ...} items into an
-// existing one, de-duplicated by url -- existing items are kept
-// as-is (their url is the identity); only genuinely new urls get
-// appended.
+// existing one, de-duplicated by url. A confirmed real bug this fixes:
+// the previous version only ever ADDED genuinely new urls and left an
+// already-existing url's item completely untouched -- meaning if a
+// later run's real search returned the same url again (common --
+// past-paper/syllabus pages don't disappear month to month), any new,
+// richer fields on it (like the real extracted content added in this
+// same update) would NEVER actually reach an entry that already had
+// that url cached from before, silently keeping it thinner forever.
+// Now merges richer fields (any real, non-empty value) into the
+// existing item when the same url reappears, instead of just skipping
+// it.
 function mergeByUrl(existingItems, newItems) {
   const existing = Array.isArray(existingItems) ? existingItems : [];
-  const seen = new Set(existing.map((item) => item.url).filter(Boolean));
-  const merged = [...existing];
+  const byUrl = new Map(existing.filter((item) => item.url).map((item) => [item.url, item]));
   for (const item of Array.isArray(newItems) ? newItems : []) {
-    if (item.url && !seen.has(item.url)) {
-      merged.push(item);
-      seen.add(item.url);
+    if (!item.url) continue;
+    if (byUrl.has(item.url)) {
+      const prior = byUrl.get(item.url);
+      const richerFields = Object.fromEntries(Object.entries(item).filter(([, v]) => v !== undefined && v !== null && v !== ""));
+      byUrl.set(item.url, { ...prior, ...richerFields });
+    } else {
+      byUrl.set(item.url, item);
     }
   }
-  return merged;
+  return Array.from(byUrl.values());
 }
 
-// Shared by both entry types -- 5 real, targeted searches (syllabus,
-// past papers, model answers/mark schemes, textbooks, revision/study
 // Shared by both entry types -- 3 real, targeted searches (syllabus,
 // past papers, textbooks), trimmed from an earlier 5-search version
 // specifically to fit Tavily's real 1,000-credit/month free budget
 // across a full 28-day rotation cycle (see this file's header comment
-// for the exact math).
+// for the exact math). Now stores real extracted content per item
+// (rawContent, capped at 6,000 characters -- see performTavilySearch),
+// not just a title/URL/snippet, per explicit request for the actual
+// material rather than just references to where it lives. syllabusSummary
+// is built from the top real result's actual content now, not just
+// short combined snippets.
 async function gatherRealData(topicQueryPrefix, subject, gradeBand) {
   const [syllabusResult, papersResult, textbookResult] = await Promise.all([
     performTavilySearch(`${topicQueryPrefix} ${subject} syllabus specification ${gradeBand}`, 3),
@@ -125,10 +154,17 @@ async function gatherRealData(topicQueryPrefix, subject, gradeBand) {
     performTavilySearch(`${topicQueryPrefix} ${subject} recommended textbook`, 3),
   ]);
 
-  const syllabusSummary = syllabusResult.results.slice(0, 2).map((r) => r.snippet).filter(Boolean).join(" ");
+  const topSyllabusResult = syllabusResult.results[0];
+  const syllabusSummary = topSyllabusResult
+    ? (topSyllabusResult.rawContent && topSyllabusResult.rawContent.trim() ? topSyllabusResult.rawContent : topSyllabusResult.snippet)
+    : "";
 
-  const newPastPapers = papersResult.results.slice(0, 4).map((r) => ({ title: r.title, url: r.link, snippet: r.snippet, kind: "past paper" }));
-  const newTextbookReferences = textbookResult.results.slice(0, 3).map((r) => ({ title: r.title, url: r.link, kind: "textbook" }));
+  const newPastPapers = papersResult.results.slice(0, 4).map((r) => ({
+    title: r.title, url: r.link, snippet: r.snippet, content: r.rawContent, kind: "past paper",
+  }));
+  const newTextbookReferences = textbookResult.results.slice(0, 3).map((r) => ({
+    title: r.title, url: r.link, snippet: r.snippet, content: r.rawContent, kind: "textbook",
+  }));
   const newSourceUrls = [...syllabusResult.results, ...papersResult.results, ...textbookResult.results].map((r) => r.link).filter(Boolean);
 
   return { syllabusSummary, newPastPapers, newTextbookReferences, newSourceUrls };
