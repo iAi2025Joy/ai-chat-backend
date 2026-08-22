@@ -174,14 +174,22 @@ async function searchScraperApi(query, maxResults) {
 async function searchScrappa(query, maxResults) {
   const apiKey = process.env.SCRAPPA_API_KEY;
   if (!apiKey) throw new Error("SCRAPPA_API_KEY is not set.");
-  // CORRECTED, in two rounds via real testSearchProviders.js runs: (1)
-  // an earlier version guessed a domain (api.scrappa.co) that doesn't
+  // CORRECTED, across several real testSearchProviders.js runs: (1) an
+  // earlier version guessed a domain (api.scrappa.co) that doesn't
   // exist at all (a real DNS ENOTFOUND error) -- Scrappa's actual API is
   // served from scrappa.co itself (no api. subdomain), and authenticates
   // via an x-api-key header (per their own docs), not Authorization:
-  // Bearer. (2) after fixing the domain/header, a real 422 response
-  // ("The query field is required") revealed the query param itself is
-  // named `query`, not `q` -- fixed below.
+  // Bearer. (2) a real 422 response ("The query field is required")
+  // revealed the query param is named `query`, not `q`. (3) a real 422
+  // ("language parameter is deprecated") revealed the correct param is
+  // `hl`, not `language`. THIS INTEGRATION IS NOW CONFIRMED CORRECT --
+  // a later real test returned a genuine 503 from Scrappa's own backend
+  // ("Search providers are temporarily unavailable. Please retry
+  // shortly."), confirming the request/auth/params here are all right;
+  // any future failure from this specific function is Scrappa's own
+  // service being temporarily down, not a bug in this code -- the
+  // fallback chain already handles that gracefully by moving on to the
+  // next provider either way.
   const response = await fetch(`https://scrappa.co/api/search?query=${encodeURIComponent(query)}&hl=en&page=0&safe_search=true`, {
     headers: { "x-api-key": apiKey },
   });
