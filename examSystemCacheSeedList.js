@@ -1,37 +1,32 @@
 // examSystemCacheSeedList.js
 // ====================
 //
-// The curated lists that refreshExamSystemCache.js keeps up to date
-// every month -- TWO separate seed lists now, per explicit request:
+// PER EXPLICIT REQUEST: the cache now refreshes on a DAILY rotation --
+// one item (a country OR an international system) per day, cycling
+// through all 28 items forever, then starting over. This replaced the
+// earlier "everything in one monthly burst" approach specifically
+// because a single burst of ~1,280 queries exceeded what a free
+// search-API tier can sustain in one sitting -- ~50 queries for a
+// single day's item comfortably fits within a real, recurring free
+// daily quota (see examSystemCacheRefresher.js for the actual search
+// calls).
 //
-//   1. buildInternationalSeedList() -- 6 major international systems
-//      (unchanged from Phase 1).
-//   2. buildArabicCountrySeedList() -- the 22 Arab League countries'
-//      own national systems, added per explicit request now that the
-//      refresh job costs nothing beyond free-tier search calls (see
-//      examSystemCacheRefresher.js's own comment on removing OpenAI).
-//
-// Every OTHER country in the world still deliberately relies on LIVE
-// per-question search only (see server.js's SCHOOL AND STUDENTS system
-// prompt) -- the same real staleness-risk reasoning as before still
-// applies to them: a national exam system can update its syllabus or
-// past papers on its own schedule, not a fixed monthly one, and a
-// stale cached entry could actively mislead a student. The 22 Arabic
-// countries are a deliberate, bounded exception, not a change to that
-// reasoning for everyone else.
-//
-// TO EXPAND LATER: add more countries to ARABIC_COUNTRIES (or start a
-// third seed list for a different region) -- no other code needs to
-// change beyond that.
+// ROTATION ORDER: Jordan first (as explicitly requested), then the
+// rest of the 22 Arab League countries, then the 6 international
+// systems, then the whole sequence repeats indefinitely. No stored
+// "where did we leave off" state is needed -- today's item is picked
+// deterministically from the real calendar date (days since epoch,
+// modulo the rotation length), so the rotation is self-healing: even
+// if a day's run is missed entirely, the next run just reflects
+// whatever day it actually is, rather than needing to catch up.
 
 export const EXAM_SYSTEMS = ["IGCSE", "SAT", "ACT", "IB", "AP", "A-Levels"];
 
-// The 22 Arab League member states, in full official English names --
-// matching this exact list (not abbreviations) is what the School
-// wizard's own WORLD_COUNTRIES dropdown already uses, so a student's
-// selection lines up with these entries without any extra mapping.
+// Jordan moved to the front per explicit request; the rest of the 22
+// Arab League countries follow in their original order.
 export const ARABIC_COUNTRIES = [
-  "Algeria", "Bahrain", "Comoros", "Djibouti", "Egypt", "Iraq", "Jordan",
+  "Jordan",
+  "Algeria", "Bahrain", "Comoros", "Djibouti", "Egypt", "Iraq",
   "Kuwait", "Lebanon", "Libya", "Mauritania", "Morocco", "Oman", "Palestine",
   "Qatar", "Saudi Arabia", "Somalia", "Sudan", "Syria", "Tunisia",
   "United Arab Emirates", "Yemen",
@@ -41,28 +36,36 @@ export const CORE_SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "Englis
 
 export const GRADE_BANDS = ["Grade 9-10", "Grade 11-12"];
 
-export function buildInternationalSeedList() {
-  const seedList = [];
-  for (const examSystem of EXAM_SYSTEMS) {
-    for (const subject of CORE_SUBJECTS) {
-      for (const gradeBand of GRADE_BANDS) {
-        seedList.push({ examSystem, subject, gradeBand });
-      }
-    }
-  }
-  return seedList;
+// The full 28-item rotation, in order: all 22 countries (Jordan
+// first), then all 6 international systems.
+export function buildRotationList() {
+  return [
+    ...ARABIC_COUNTRIES.map((country) => ({ type: "country", country })),
+    ...EXAM_SYSTEMS.map((examSystem) => ({ type: "international", examSystem })),
+  ];
 }
 
-export function buildArabicCountrySeedList() {
-  const seedList = [];
-  for (const country of ARABIC_COUNTRIES) {
-    for (const subject of CORE_SUBJECTS) {
-      for (const gradeBand of GRADE_BANDS) {
-        seedList.push({ country, subject, gradeBand });
-      }
+// Deterministically picks today's rotation item from the real
+// calendar date -- see the file header comment on why this needs no
+// persisted state.
+export function getTodaysRotationItem() {
+  const rotationList = buildRotationList();
+  const daysSinceEpoch = Math.floor(Date.now() / 86400000);
+  const todayIndex = daysSinceEpoch % rotationList.length;
+  return rotationList[todayIndex];
+}
+
+// All (subject, gradeBand) combinations for a single rotation item --
+// 10 entries (5 subjects x 2 grade bands), refreshed together on that
+// item's day.
+export function buildSubjectGradeCombos() {
+  const combos = [];
+  for (const subject of CORE_SUBJECTS) {
+    for (const gradeBand of GRADE_BANDS) {
+      combos.push({ subject, gradeBand });
     }
   }
-  return seedList;
+  return combos;
 }
 
 // The exact same normalization used both when WRITING a cache entry
