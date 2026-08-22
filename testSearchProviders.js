@@ -103,7 +103,7 @@ async function testScraperApi() {
 async function testScrappa() {
   const apiKey = process.env.SCRAPPA_API_KEY;
   if (!apiKey) throw new Error("SCRAPPA_API_KEY is not set.");
-  const response = await fetch(`https://scrappa.co/api/search?query=${encodeURIComponent(TEST_QUERY)}&language=english&page=0&safe_search=true`, {
+  const response = await fetch(`https://scrappa.co/api/search?query=${encodeURIComponent(TEST_QUERY)}&hl=en&page=0&safe_search=true`, {
     headers: { "x-api-key": apiKey },
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
