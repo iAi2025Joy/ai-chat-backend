@@ -1,0 +1,51 @@
+# monthly-exam-cache-refresh.yml
+# ====================
+#
+# Free monthly trigger for GARNET's School and Students exam-system
+# cache refresh -- calls the protected POST /admin/refresh-exam-cache
+# endpoint on the existing free Render backend (see server.js and
+# examSystemCacheRefresher.js for the real logic this runs). GitHub
+# Actions' scheduled workflows are free for both public and private
+# repositories within GitHub's standard free-tier minutes, which this
+# workflow uses only a handful of per month (it just makes one HTTP
+# call and waits for the response) -- this avoids Render's own Cron
+# Jobs feature, which requires upgrading to a paid instance type.
+#
+# SETUP REQUIRED (one-time):
+#   1. In this GitHub repo -> Settings -> Secrets and variables ->
+#      Actions -> New repository secret:
+#        Name: EXAM_CACHE_REFRESH_SECRET
+#        Value: (any long random string you make up)
+#   2. In Render -> ai-chat-backend-GARNET-26 -> Environment -> add the
+#      SAME value as an environment variable also named
+#      EXAM_CACHE_REFRESH_SECRET, then redeploy so the backend picks it
+#      up. The two values must match exactly, or every run will fail
+#      with a 401 (by design -- see server.js's own comment on why this
+#      endpoint isn't left unauthenticated).
+
+name: Monthly Exam System Cache Refresh
+
+on:
+  schedule:
+    # 3:00 AM UTC on the 1st of every month. GitHub Actions cron syntax
+    # is standard 5-field cron (minute hour day month weekday).
+    - cron: "0 3 1 * *"
+  # Lets you trigger a run manually from the Actions tab too, without
+  # waiting for the schedule -- useful the first time, to confirm the
+  # secret is set up correctly before trusting the monthly schedule.
+  workflow_dispatch: {}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    # The refresh itself can take several minutes (60 entries, a
+    # couple of real search rounds each, with a deliberate pause
+    # between entries to avoid rate limits) -- well under GitHub
+    # Actions' own default 6-hour job timeout, so no special timeout
+    # configuration is needed here.
+    steps:
+      - name: Trigger exam system cache refresh
+        run: |
+          curl -f -X POST "https://ai-chat-backend-garnet-26.onrender.com/admin/refresh-exam-cache" \
+            -H "x-refresh-secret: ${{ secrets.EXAM_CACHE_REFRESH_SECRET }}" \
+            --max-time 1800
