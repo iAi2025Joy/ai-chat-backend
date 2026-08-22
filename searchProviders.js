@@ -174,13 +174,15 @@ async function searchScraperApi(query, maxResults) {
 async function searchScrappa(query, maxResults) {
   const apiKey = process.env.SCRAPPA_API_KEY;
   if (!apiKey) throw new Error("SCRAPPA_API_KEY is not set.");
-  // CORRECTED: an earlier version of this function guessed a domain
-  // (api.scrappa.co) that doesn't exist at all (confirmed via
-  // testSearchProviders.js -- a real DNS ENOTFOUND error). Scrappa's
-  // actual API is served from scrappa.co itself (no api. subdomain),
-  // and authenticates via an x-api-key header (per their own docs),
-  // not an Authorization: Bearer header.
-  const response = await fetch(`https://scrappa.co/api/search?q=${encodeURIComponent(query)}`, {
+  // CORRECTED, in two rounds via real testSearchProviders.js runs: (1)
+  // an earlier version guessed a domain (api.scrappa.co) that doesn't
+  // exist at all (a real DNS ENOTFOUND error) -- Scrappa's actual API is
+  // served from scrappa.co itself (no api. subdomain), and authenticates
+  // via an x-api-key header (per their own docs), not Authorization:
+  // Bearer. (2) after fixing the domain/header, a real 422 response
+  // ("The query field is required") revealed the query param itself is
+  // named `query`, not `q` -- fixed below.
+  const response = await fetch(`https://scrappa.co/api/search?query=${encodeURIComponent(query)}`, {
     headers: { "x-api-key": apiKey },
   });
   if (!response.ok) {
