@@ -72,19 +72,6 @@ function getDb() {
 // Serper's "answer box" -- answerBox is always null here, callers
 // already handle that gracefully by falling back to combined snippets.
 //
-// PER EXPLICIT REQUEST: now requests real extracted page content
-// (include_raw_content: "markdown"), not just the short snippet Tavily
-// returns by default -- a confirmed real gap this fixes: the cache was
-// only ever storing search-result METADATA (title, URL, a one-line
-// snippet), never the actual material itself, so a student's cached
-// "past paper" entry was really just a link to go read, the same
-// "here's where to look" problem already fixed elsewhere in School and
-// Students. Each result's rawContent is capped at 6,000 characters
-// (see gatherRealData below) -- Firestore's 1 MiB per-document limit
-// makes storing truly unlimited full-page text per entry unsafe, but
-// 6,000 characters is substantially more real, readable material than
-// a snippet while staying comfortably within that limit even with
-// several results per entry.
 // A confirmed real bug this fixes: some pages' markdown extraction
 // includes embedded base64-encoded images (a page's own logo/icon,
 // e.g. "![Scribd](data:image/svg+xml;base64,PD94bWwg...") -- these are
@@ -99,6 +86,48 @@ function getDb() {
 function stripEmbeddedBase64Images(text) {
   return (text || "").replace(/!\[[^\]]*\]\(data:[^)]+\)/g, "");
 }
+
+// Tavily's dedicated Extract API -- a real, separate fallback for
+// results where /search's own lightweight raw_content extraction came
+// back empty or too short to be genuinely useful (page structure it
+// couldn't parse cleanly, JS-rendered content, etc. -- a normal,
+// expected failure mode for SOME pages, not every one). Used only as
+// a targeted fallback, not for every result, to keep real credit cost
+// bounded -- "basic" extract_depth costs 1 credit per URL, the same
+// as a basic search.
+async function extractPageContent(url) {
+  const apiKey = process.env.TAVILY_API_KEY1;
+  try {
+    const response = await fetch("https://api.tavily.com/extract", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ urls: [url], extract_depth: "basic", format: "markdown" }),
+    });
+    if (!response.ok) return "";
+    const data = await response.json();
+    const result = (data.results || [])[0];
+    return result ? stripEmbeddedBase64Images(result.raw_content || "") : "";
+  } catch (err) {
+    return ""; // a failed fallback attempt just means no content for this one result -- never breaks the overall run
+  }
+}
+
+// PER EXPLICIT REQUEST: stores the REAL material itself, not a
+// snippet-plus-link stub -- a single "content" field per item, always
+// populated with the best real text actually available (Tavily
+// search's own raw_content, or the dedicated Extract API as a
+// fallback when that came back too short, or Tavily's own short
+// search snippet only as a last resort if both real-content attempts
+// genuinely failed). No separate "snippet" field is kept once real
+// content exists -- it added no value beyond what's already folded
+// into content. url stays, for real citation purposes, not as a
+// stand-in for the material itself. Capped at 6,000 characters --
+// Firestore's 1 MiB per-document limit makes storing truly unlimited
+// full-page text per entry unsafe, but 6,000 characters is
+// substantially more real, readable material than a snippet while
+// staying comfortably within that limit even with several results per
+// entry.
+const MIN_USEFUL_CONTENT_LENGTH = 200; // shorter than this suggests extraction genuinely failed, not just a naturally short page
 
 async function performTavilySearch(query, maxResults = 5) {
   const apiKey = process.env.TAVILY_API_KEY1;
@@ -115,11 +144,23 @@ async function performTavilySearch(query, maxResults = 5) {
     throw new Error(`Tavily API returned ${response.status}: ${body.slice(0, 200)}`);
   }
   const data = await response.json();
-  const results = (data.results || []).map((item) => ({
-    title: item.title || "",
-    link: item.url || "",
-    snippet: item.content || "",
-    rawContent: stripEmbeddedBase64Images(item.raw_content || "").slice(0, 6000),
+  const results = await Promise.all((data.results || []).map(async (item) => {
+    let content = stripEmbeddedBase64Images(item.raw_content || "");
+    if (content.trim().length < MIN_USEFUL_CONTENT_LENGTH && item.url) {
+      // Search-time extraction came back too short -- a targeted
+      // fallback attempt at the real content via Extract, rather than
+      // silently settling for a thin snippet.
+      const extracted = await extractPageContent(item.url);
+      if (extracted.trim().length > content.trim().length) content = extracted;
+    }
+    if (content.trim().length < MIN_USEFUL_CONTENT_LENGTH) {
+      // Both real-content attempts genuinely failed for this one
+      // result -- Tavily's own short search snippet as the last
+      // resort, so this result isn't dropped entirely, just clearly
+      // thinner than the real-content results.
+      content = item.content || "";
+    }
+    return { title: item.title || "", link: item.url || "", content: content.slice(0, 6000) };
   }));
   return { results, answerBox: null };
 }
@@ -156,12 +197,10 @@ function mergeByUrl(existingItems, newItems) {
 // past papers, textbooks), trimmed from an earlier 5-search version
 // specifically to fit Tavily's real 1,000-credit/month free budget
 // across a full 28-day rotation cycle (see this file's header comment
-// for the exact math). Now stores real extracted content per item
-// (rawContent, capped at 6,000 characters -- see performTavilySearch),
-// not just a title/URL/snippet, per explicit request for the actual
-// material rather than just references to where it lives. syllabusSummary
-// is built from the top real result's actual content now, not just
-// short combined snippets.
+// for the exact math). Stores the real material itself (content),
+// per explicit request -- no separate snippet field, that's already
+// folded into content by performTavilySearch's own real-content-first,
+// Extract-fallback, snippet-last-resort logic.
 async function gatherRealData(topicQueryPrefix, subject, gradeBand) {
   const [syllabusResult, papersResult, textbookResult] = await Promise.all([
     performTavilySearch(`${topicQueryPrefix} ${subject} syllabus specification ${gradeBand}`, 3),
@@ -170,15 +209,13 @@ async function gatherRealData(topicQueryPrefix, subject, gradeBand) {
   ]);
 
   const topSyllabusResult = syllabusResult.results[0];
-  const syllabusSummary = topSyllabusResult
-    ? (topSyllabusResult.rawContent && topSyllabusResult.rawContent.trim() ? topSyllabusResult.rawContent : topSyllabusResult.snippet)
-    : "";
+  const syllabusSummary = topSyllabusResult ? topSyllabusResult.content : "";
 
   const newPastPapers = papersResult.results.slice(0, 4).map((r) => ({
-    title: r.title, url: r.link, snippet: r.snippet, content: r.rawContent, kind: "past paper",
+    title: r.title, url: r.link, content: r.content, kind: "past paper",
   }));
   const newTextbookReferences = textbookResult.results.slice(0, 3).map((r) => ({
-    title: r.title, url: r.link, snippet: r.snippet, content: r.rawContent, kind: "textbook",
+    title: r.title, url: r.link, content: r.content, kind: "textbook",
   }));
   const newSourceUrls = [...syllabusResult.results, ...papersResult.results, ...textbookResult.results].map((r) => r.link).filter(Boolean);
 
