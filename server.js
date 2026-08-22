@@ -2398,11 +2398,16 @@ app.get("/admin/test-search-providers", async (req, res) => {
     const response = await fetch(`https://scrappa.co/api/search?query=${encodeURIComponent(TEST_QUERY)}&hl=en&page=0&safe_search=true`, {
       headers: { "x-api-key": apiKey },
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
-    const data = await response.json();
-    const items = data.results || [];
-    if (items.length === 0) throw new Error("No results in response.");
-    return { count: items.length, sample: items[0].title || "(no title)" };
+    const rawBody = await response.text();
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${rawBody.slice(0, 400)}`);
+    // TEMPORARY DEBUG: dumping the full raw response body instead of
+    // parsing it -- the request is succeeding (200 OK) but our expected
+    // `results` array keeps coming back empty across multiple different
+    // queries, which rules out a query-content gap. Rather than keep
+    // guessing at field names from outside docs, show the REAL response
+    // shape so the actual key holding the data (if any) can be seen
+    // directly, instead of assumed.
+    throw new Error(`DEBUG raw response body: ${rawBody.slice(0, 800)}`);
   });
 
   await tryProvider("serpapi", async () => {
