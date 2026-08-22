@@ -1,65 +1,62 @@
 # monthly-exam-cache-refresh.yml
 # ====================
+# (filename kept for continuity even though the schedule is now DAILY
+# -- see below)
 #
-# Free monthly trigger for GARNET's School and Students exam-system
+# Free daily trigger for GARNET's School and Students exam-system
 # cache refresh -- calls the protected POST /admin/refresh-exam-cache
-# endpoint on the existing free Render backend (see server.js and
-# examSystemCacheRefresher.js for the real logic this runs). GitHub
-# Actions' scheduled workflows are free for both public and private
-# repositories within GitHub's standard free-tier minutes, which this
-# workflow uses only a handful of per month (it just makes one HTTP
-# call and waits for the response) -- this avoids Render's own Cron
-# Jobs feature, which requires upgrading to a paid instance type.
+# endpoint on the existing free Render backend, which now refreshes
+# ONE rotation item per day (a single Arab country or a single
+# international system -- see examSystemCacheSeedList.js and
+# examSystemCacheRefresher.js for the full "why"). GitHub Actions'
+# scheduled workflows are free within GitHub's standard free-tier
+# minutes, which this workflow uses only a couple of per day (one
+# HTTP call and a short wait).
+#
+# PER EXPLICIT REQUEST: changed from a monthly full-refresh burst to a
+# daily single-item rotation, specifically because a monthly burst of
+# ~1,280 real search queries in one sitting exceeded what a free
+# search-API tier can sustain (a confirmed real failure). A single
+# day's item needs only ~50 queries, which comfortably fits Google's
+# real, RECURRING free daily quota (100/day) -- see
+# examSystemCacheRefresher.js for the actual Google Custom Search
+# integration that replaced Serper for this job specifically.
 #
 # SETUP REQUIRED (one-time):
 #   1. In this GitHub repo -> Settings -> Secrets and variables ->
 #      Actions -> New repository secret:
 #        Name: EXAM_CACHE_REFRESH_SECRET
 #        Value: (any long random string you make up)
-#   2. In Render -> ai-chat-backend-GARNET-26 -> Environment -> add the
-#      SAME value as an environment variable also named
-#      EXAM_CACHE_REFRESH_SECRET, then redeploy so the backend picks it
-#      up. The two values must match exactly, or every run will fail
-#      with a 401 (by design -- see server.js's own comment on why this
-#      endpoint isn't left unauthenticated).
+#   2. In Render -> ai-chat-backend-GARNET-26 -> Environment -> add:
+#        - EXAM_CACHE_REFRESH_SECRET (same value as the GitHub secret)
+#        - GOOGLE_CUSTOM_SEARCH_API_KEY
+#        - GOOGLE_CUSTOM_SEARCH_ENGINE_ID
+#      then redeploy so the backend picks them up.
 
 name: Monthly Exam System Cache Refresh
 
 on:
   schedule:
-    # 3:00 AM UTC on the 1st of every month. GitHub Actions cron syntax
-    # is standard 5-field cron (minute hour day month weekday).
-    - cron: "0 3 1 * *"
+    # Every day at 3:00 AM UTC -- one rotation item refreshed per run.
+    - cron: "0 3 * * *"
   # Lets you trigger a run manually from the Actions tab too, without
-  # waiting for the schedule -- useful the first time, to confirm the
-  # secret is set up correctly before trusting the monthly schedule.
+  # waiting for the schedule -- useful for testing.
   workflow_dispatch: {}
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    # The refresh itself can take several minutes (60 entries, a
-    # couple of real search rounds each, with a deliberate pause
-    # between entries to avoid rate limits) -- well under GitHub
-    # Actions' own default 6-hour job timeout, so no special timeout
-    # configuration is needed here.
     steps:
       - name: Trigger exam system cache refresh
         run: |
-          # A confirmed real bug this fixes: removing curl's -f flag
-          # (needed to see the real error body on failure -- see this
-          # workflow's own prior version) meant curl always exited 0
-          # regardless of the actual HTTP status, so a genuine 500
-          # error still showed as a green "succeeded" checkmark in the
-          # Actions UI -- exactly what happened on run #3, which
-          # returned a real error in 3 seconds but still looked like
-          # success. This captures the real status code, prints the
-          # real response body either way, and NOW explicitly fails
-          # the step (exit 1) on anything outside 200-299, so a broken
-          # run is never silently green again.
+          # Prints the real response body either way (not just a pass/
+          # fail badge -- see this workflow's own earlier history for
+          # why that matters), and explicitly fails the step on
+          # anything outside 200-299 so a broken run is never silently
+          # green.
           response=$(curl -s -X POST "https://ai-chat-backend-garnet-26.onrender.com/admin/refresh-exam-cache" \
             -H "x-refresh-secret: ${{ secrets.EXAM_CACHE_REFRESH_SECRET }}" \
-            --max-time 1800 \
+            --max-time 600 \
             -w "\nHTTP_STATUS:%{http_code}")
           echo "$response"
           status=$(echo "$response" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
