@@ -182,7 +182,7 @@ async function searchScrappa(query, maxResults) {
   // Bearer. (2) after fixing the domain/header, a real 422 response
   // ("The query field is required") revealed the query param itself is
   // named `query`, not `q` -- fixed below.
-  const response = await fetch(`https://scrappa.co/api/search?query=${encodeURIComponent(query)}`, {
+  const response = await fetch(`https://scrappa.co/api/search?query=${encodeURIComponent(query)}&language=english&page=0&safe_search=true`, {
     headers: { "x-api-key": apiKey },
   });
   if (!response.ok) {
