@@ -46,14 +46,24 @@ jobs:
     steps:
       - name: Trigger exam system cache refresh
         run: |
-          # Deliberately NOT using curl's -f flag here -- -f suppresses
-          # the real response body on a non-2xx status, which is
-          # exactly what made a real failure impossible to diagnose
-          # from this log alone (a confirmed real problem this fixes).
-          # -w prints the real HTTP status code after the real JSON
-          # body, so a failure shows the actual error message, not just
-          # "curl: (22) ... error: 500" with nothing else to go on.
-          curl -X POST "https://ai-chat-backend-garnet-26.onrender.com/admin/refresh-exam-cache" \
+          # A confirmed real bug this fixes: removing curl's -f flag
+          # (needed to see the real error body on failure -- see this
+          # workflow's own prior version) meant curl always exited 0
+          # regardless of the actual HTTP status, so a genuine 500
+          # error still showed as a green "succeeded" checkmark in the
+          # Actions UI -- exactly what happened on run #3, which
+          # returned a real error in 3 seconds but still looked like
+          # success. This captures the real status code, prints the
+          # real response body either way, and NOW explicitly fails
+          # the step (exit 1) on anything outside 200-299, so a broken
+          # run is never silently green again.
+          response=$(curl -s -X POST "https://ai-chat-backend-garnet-26.onrender.com/admin/refresh-exam-cache" \
             -H "x-refresh-secret: ${{ secrets.EXAM_CACHE_REFRESH_SECRET }}" \
             --max-time 1800 \
-            -w "\nHTTP status: %{http_code}\n"
+            -w "\nHTTP_STATUS:%{http_code}")
+          echo "$response"
+          status=$(echo "$response" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Refresh failed with HTTP status $status -- see the response body above for the real error."
+            exit 1
+          fi
