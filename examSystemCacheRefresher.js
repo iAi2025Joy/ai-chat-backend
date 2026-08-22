@@ -8,117 +8,90 @@
 //   2. On a schedule, at no cost: a free GitHub Actions workflow calls
 //      the protected POST /admin/refresh-exam-cache endpoint on this
 //      same free Render backend once a month (see server.js and
-//      .github/workflows/monthly-exam-cache-refresh.yml) -- this
-//      avoids Render's own Cron Jobs feature, which requires a paid
-//      instance type. Both paths run through this exact same code, so
-//      there's no risk of the two ever drifting apart.
+//      .github/workflows/monthly-exam-cache-refresh.yml).
+//
+// PER EXPLICIT REQUEST: this no longer uses OpenAI at all -- OpenAI
+// was only ever being used here to ORGANIZE/SUMMARIZE real search
+// results into tidy prose, not to find anything itself; the actual
+// information always came from real web searches. Removed entirely to
+// cut this job's real, ongoing cost to zero beyond the search API
+// itself (which the app already pays for regardless of this feature,
+// via SERPER_API_KEY -- see webSearch.js -- and this job's ~180
+// queries/month is comfortably inside Serper's free 2,500/month tier).
+// The real, honest tradeoff: syllabusSummary is now Google's own
+// "answer box" when one exists, or raw combined search snippets
+// otherwise, instead of an AI-written paragraph -- less polished
+// prose, but genuinely MORE trustworthy in one specific way: there's
+// no AI step that could subtly misrepresent or paraphrase the real
+// results, just the real results themselves, directly.
 //
 // For each (exam system, subject, grade band) in
-// examSystemCacheSeedList.js, this does a REAL web search to gather a
-// current syllabus summary, real past-paper links, and real textbook
-// references, then writes the result to Firestore. server.js's /chat
-// handler reads this cache (see the SCHOOL AND STUDENTS CACHE LOOKUP
-// block) to give faster, richer answers for these common combinations,
-// while still doing its own live per-question search for the specific
-// question itself.
+// examSystemCacheSeedList.js, this makes 3 real, targeted searches
+// (syllabus, past papers, textbooks) and writes the real results to
+// Firestore. server.js's /chat handler reads this cache (see the
+// SCHOOL AND STUDENTS CACHE LOOKUP block) to give faster, richer
+// answers for these common combinations, while still doing its own
+// live per-question search (via the model, as before) for the
+// specific question itself.
 
-import OpenAI from "openai";
 import admin from "firebase-admin";
 import { getFirebaseAdmin } from "./adminUsers.js";
-import { handleWebSearchCall } from "./webSearch.js";
+import { performWebSearch } from "./webSearch.js";
 import { buildSeedList, cacheDocId } from "./examSystemCacheSeedList.js";
-
-function getOpenAiClient() {
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-}
 
 function getDb() {
   getFirebaseAdmin(); // ensures admin.initializeApp() has actually run -- throws a clear error if FIREBASE_SERVICE_ACCOUNT_JSON is missing, same as adminUsers.js's own routes do
   return admin.firestore();
 }
 
-// A small, focused tool set -- just enough for this job's one purpose
-// (find real current info), reusing the same real search provider
-// server.js's own search_web tool calls in a normal chat request --
-// kept intentionally simpler here since this runs unattended, not as
-// part of an interactive chat turn.
-const REFRESH_TOOLS = [
-  {
-    type: "function",
-    function: {
-      name: "search_web",
-      description: "Search the web for real, current results.",
-      parameters: {
-        type: "object",
-        properties: { query: { type: "string" } },
-        required: ["query"],
-      },
-    },
-  },
-];
-
-async function refreshOneEntry(openai, { examSystem, subject, gradeBand }) {
+async function refreshOneEntry({ examSystem, subject, gradeBand }) {
   const docId = cacheDocId(examSystem, subject, gradeBand);
   console.log(`Refreshing: ${docId}`);
 
-  const messages = [
-    {
-      role: "system",
-      content:
-        "You are gathering REAL, current reference information for a school exam-prep cache. " +
-        "Use search_web to find the real current syllabus/specification, 2-3 REAL past exam paper " +
-        "links (with real years), and 1-2 real, commonly-used textbook titles+authors for the given " +
-        "exam system, subject, and grade band. NEVER invent a paper, year, or textbook that wasn't " +
-        "actually found via a real search. Respond with ONLY a JSON object, no other text, no markdown " +
-        "fences, in exactly this shape: " +
-        '{"syllabusSummary": "2-3 sentence real summary of what this grade band\'s syllabus for this ' +
-        'subject actually covers", "pastPapers": [{"title": "...", "url": "...", "year": "..."}], ' +
-        '"textbookReferences": [{"title": "...", "author": "..."}], "sourceUrls": ["..."]}',
-    },
-    {
-      role: "user",
-      content: `Exam system: ${examSystem}. Subject: ${subject}. Grade band: ${gradeBand}.`,
-    },
-  ];
+  // Three separate, narrowly-targeted real searches -- one per kind of
+  // information -- rather than one broad search and hoping an AI could
+  // sort out three different things from it (which is what the old,
+  // OpenAI-based version effectively did).
+  const [syllabusResult, papersResult, textbookResult] = await Promise.all([
+    performWebSearch(`${examSystem} ${subject} syllabus specification ${gradeBand}`, 3),
+    performWebSearch(`${examSystem} ${subject} past papers`, 5),
+    performWebSearch(`${examSystem} ${subject} recommended textbook`, 3),
+  ]);
 
-  let response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages,
-    tools: REFRESH_TOOLS,
-  });
+  // Prefers Google's own "answer box" when one exists (usually a
+  // clean, short, real summary) -- falls back to combining the top
+  // couple of real snippets when there isn't one. Either way, this is
+  // the real search provider's own text, not AI-generated.
+  const syllabusSummary = syllabusResult.answerBox && syllabusResult.answerBox.answer
+    ? syllabusResult.answerBox.answer
+    : syllabusResult.results.slice(0, 2).map((r) => r.snippet).filter(Boolean).join(" ");
 
-  // Up to 4 tool-call rounds -- enough for a couple of real searches
-  // without risking this unattended job looping indefinitely.
-  let rounds = 0;
-  while (response.choices[0].message.tool_calls && rounds < 4) {
-    rounds++;
-    const toolMessage = response.choices[0].message;
-    messages.push(toolMessage);
-    for (const toolCall of toolMessage.tool_calls) {
-      const result = await handleWebSearchCall(toolCall.function.arguments);
-      messages.push({ role: "tool", tool_call_id: toolCall.id, content: result });
-    }
-    response = await openai.chat.completions.create({ model: "gpt-4o", messages, tools: REFRESH_TOOLS });
-  }
+  const pastPapers = papersResult.results.slice(0, 4).map((r) => ({
+    title: r.title,
+    url: r.link,
+    snippet: r.snippet,
+  }));
 
-  const raw = response.choices[0].message.content || "{}";
-  let parsed;
-  try {
-    parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ""));
-  } catch (err) {
-    console.error(`  Could not parse result for ${docId} -- skipping this entry, leaving any previous cached version in place. Raw: ${raw.slice(0, 200)}`);
-    return { docId, skipped: true };
-  }
+  const textbookReferences = textbookResult.results.slice(0, 3).map((r) => ({
+    title: r.title,
+    url: r.link,
+  }));
+
+  const sourceUrls = [
+    ...syllabusResult.results.map((r) => r.link),
+    ...papersResult.results.map((r) => r.link),
+    ...textbookResult.results.map((r) => r.link),
+  ].filter(Boolean);
 
   const db = getDb();
   await db.collection("examSystemCache").doc(docId).set({
     examSystem,
     subject,
     gradeBand,
-    syllabusSummary: parsed.syllabusSummary || "",
-    pastPapers: Array.isArray(parsed.pastPapers) ? parsed.pastPapers : [],
-    textbookReferences: Array.isArray(parsed.textbookReferences) ? parsed.textbookReferences : [],
-    sourceUrls: Array.isArray(parsed.sourceUrls) ? parsed.sourceUrls : [],
+    syllabusSummary,
+    pastPapers,
+    textbookReferences,
+    sourceUrls,
     lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
   });
   console.log(`  Saved ${docId}`);
@@ -130,7 +103,6 @@ async function refreshOneEntry(openai, { examSystem, subject, gradeBand }) {
 // returns a real summary (used in the HTTP response, and printed by
 // the standalone script).
 export async function runExamSystemCacheRefresh() {
-  const openai = getOpenAiClient();
   const seedList = buildSeedList();
   console.log(`Starting refresh of ${seedList.length} exam-system cache entries...`);
   let succeeded = 0;
@@ -138,7 +110,7 @@ export async function runExamSystemCacheRefresh() {
   const failures = [];
   for (const entry of seedList) {
     try {
-      const result = await refreshOneEntry(openai, entry);
+      const result = await refreshOneEntry(entry);
       if (result.skipped) skipped++;
       else succeeded++;
     } catch (err) {
@@ -147,10 +119,10 @@ export async function runExamSystemCacheRefresh() {
       skipped++;
       failures.push({ docId, error: err.message });
     }
-    // A small pause between entries -- avoids bursting the OpenAI/
-    // search-provider rate limits across 60 back-to-back calls, the
-    // same real lesson learned from this session's own TPM 429 issue.
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // A small pause between entries -- purely to be a good citizen
+    // toward the search API's own rate limits, not for any OpenAI-
+    // related reason now that this job no longer calls OpenAI at all.
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
   const summary = { total: seedList.length, succeeded, skipped, failures };
   console.log(`Done. ${succeeded} refreshed, ${skipped} skipped/failed.`);

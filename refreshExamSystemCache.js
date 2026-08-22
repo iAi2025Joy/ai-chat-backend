@@ -3,8 +3,10 @@
 //
 // Standalone entry point -- run manually/locally with:
 //   node refreshExamSystemCache.js
-// (needs the same OPENAI_API_KEY and FIREBASE_SERVICE_ACCOUNT_JSON
-// environment variables server.js itself already uses.)
+// (needs FIREBASE_SERVICE_ACCOUNT_JSON and SERPER_API_KEY -- the same
+// two environment variables server.js itself already uses. No longer
+// needs OPENAI_API_KEY -- this job doesn't call OpenAI at all anymore,
+// see examSystemCacheRefresher.js's own comment on why.)
 //
 // This is now a thin wrapper around examSystemCacheRefresher.js's
 // exported runExamSystemCacheRefresh() -- the SAME function the free
