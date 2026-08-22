@@ -4,7 +4,7 @@ import cors from "cors";
 import OpenAI from "openai";
 import admin from "firebase-admin";
 import { getFirebaseAdmin } from "./adminUsers.js";
-import { cacheDocId, gradeToGradeBand, EXAM_SYSTEMS } from "./examSystemCacheSeedList.js";
+import { cacheDocId, countryCacheDocId, gradeToGradeBand, EXAM_SYSTEMS, ARABIC_COUNTRIES } from "./examSystemCacheSeedList.js";
 import {
   getGoldPredictionToolDefinition,
   handleGoldPredictionCall,
@@ -354,36 +354,49 @@ app.post("/chat", rateLimitChat, async (req, res) => {
   };
 
   try {
-    const { message, mode, timezone: userTimezone, history, images, documents, isVoiceMode, spokenLanguageKey, schoolThorough, schoolExamSystem, schoolSubject, schoolGrade } = req.body;
+    const { message, mode, timezone: userTimezone, history, images, documents, isVoiceMode, spokenLanguageKey, schoolThorough, schoolExamSystem, schoolSubject, schoolGrade, schoolCountry } = req.body;
     const hasImages = Array.isArray(images) && images.length > 0;
 
     // SCHOOL AND STUDENTS CACHE LOOKUP -- checks the monthly-refreshed
-    // examSystemCache (see refreshExamSystemCache.js) for a matching
-    // (exam system, subject, grade band) entry, and if found and not
-    // stale, adds its real syllabus summary / past-paper links /
-    // textbook references as extra system-prompt context. Deliberately
-    // best-effort: only runs for science_school, only for the six
-    // major international systems currently seeded (Phase 1 -- see
-    // examSystemCacheSeedList.js's own comment on why national/
-    // regional systems are intentionally NOT cached), and any failure
-    // here (missing Firestore credentials, no matching entry, a stale
-    // entry) just falls through to the exact same behavior as before
-    // this feature existed -- it never blocks or breaks a real answer.
+    // examSystemCache (see examSystemCacheRefresher.js) for a matching
+    // entry, and if found and not stale, adds its real syllabus
+    // summary / past-paper links / textbook references as extra
+    // system-prompt context. TWO paths now, per explicit request:
+    //   - International systems (schoolExamSystem is one of the six
+    //     seeded ones) -- unchanged from Phase 1.
+    //   - Arab League countries (schoolExamSystem is literally "My
+    //     country's national system" AND schoolCountry is one of the
+    //     22 seeded countries) -- added per explicit request, now that
+    //     the refresh job is free. Every OTHER country still relies on
+    //     live search only -- see examSystemCacheSeedList.js's own
+    //     comment on why that stays true for the rest of the world.
+    // Deliberately best-effort either way: any failure here (missing
+    // Firestore credentials, no matching entry, a stale entry) just
+    // falls through to the exact same live-search-only behavior as
+    // before this feature existed -- it never blocks or breaks a real
+    // answer.
     let schoolCacheContext = null;
-    if (mode === "science_school" && EXAM_SYSTEMS.includes(schoolExamSystem)) {
+    if (mode === "science_school") {
       try {
         const gradeBand = gradeToGradeBand(schoolGrade);
         if (gradeBand) {
-          getFirebaseAdmin();
-          const db = admin.firestore();
-          const docId = cacheDocId(schoolExamSystem, schoolSubject, gradeBand);
-          const doc = await db.collection("examSystemCache").doc(docId).get();
-          if (doc.exists) {
-            const data = doc.data();
-            const lastUpdated = data.lastUpdated && data.lastUpdated.toDate ? data.lastUpdated.toDate() : null;
-            const daysSinceUpdate = lastUpdated ? (Date.now() - lastUpdated.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
-            if (daysSinceUpdate <= 45) { // a bit past the monthly cadence, so a slightly-delayed refresh run doesn't discard an otherwise-good entry
-              schoolCacheContext = data;
+          let docId = null;
+          if (EXAM_SYSTEMS.includes(schoolExamSystem)) {
+            docId = cacheDocId(schoolExamSystem, schoolSubject, gradeBand);
+          } else if (schoolExamSystem === "My country's national system" && ARABIC_COUNTRIES.includes(schoolCountry)) {
+            docId = countryCacheDocId(schoolCountry, schoolSubject, gradeBand);
+          }
+          if (docId) {
+            getFirebaseAdmin();
+            const db = admin.firestore();
+            const doc = await db.collection("examSystemCache").doc(docId).get();
+            if (doc.exists) {
+              const data = doc.data();
+              const lastUpdated = data.lastUpdated && data.lastUpdated.toDate ? data.lastUpdated.toDate() : null;
+              const daysSinceUpdate = lastUpdated ? (Date.now() - lastUpdated.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
+              if (daysSinceUpdate <= 45) { // a bit past the monthly cadence, so a slightly-delayed refresh run doesn't discard an otherwise-good entry
+                schoolCacheContext = data;
+              }
             }
           }
         }
@@ -956,12 +969,12 @@ app.post("/chat", rateLimitChat, async (req, res) => {
           ? [{
               role: "system",
               content:
-                `CACHED REFERENCE CONTEXT (refreshed within the last 45 days, for ${schoolExamSystem} ${schoolSubject}) -- ` +
+                `CACHED REFERENCE CONTEXT (refreshed within the last 45 days, for ${schoolCacheContext.entryType === "country" ? schoolCacheContext.country : schoolExamSystem} ${schoolSubject}) -- ` +
                 `use this as a real, already-verified starting point for syllabus/curriculum background and past-paper awareness, ` +
                 `but still do your own live search for the SPECIFIC question being asked, and never treat this cached summary as ` +
                 `a substitute for actually answering the real question. Syllabus summary: ${schoolCacheContext.syllabusSummary || "(none)"}. ` +
-                `Real past papers on file: ${(schoolCacheContext.pastPapers || []).map((p) => `${p.title} (${p.year}): ${p.url}`).join("; ") || "(none)"}. ` +
-                `Real textbook references: ${(schoolCacheContext.textbookReferences || []).map((t) => `${t.title} by ${t.author}`).join("; ") || "(none)"}.`,
+                `Real past papers on file: ${(schoolCacheContext.pastPapers || []).map((p) => `${p.title}: ${p.url}`).join("; ") || "(none)"}. ` +
+                `Real textbook references: ${(schoolCacheContext.textbookReferences || []).map((t) => `${t.title}: ${t.url}`).join("; ") || "(none)"}.`,
             }]
           : []),
         ...(mode === "science_research_assistant"
