@@ -73,21 +73,26 @@ async function searchBrightData(query, maxResults) {
   // API was set up this session -- override via BRIGHTDATA_ZONE if the
   // zone is ever renamed or a second zone is added later.
   const zone = process.env.BRIGHTDATA_ZONE || "serp_api1";
-  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=${maxResults}`;
+  // CONFIRMED WORKING PATTERN (via Bright Data's own official GitHub
+  // skills repo, brightdata/skills): format:"raw" + &brd_json=1 appended
+  // to the actual Google search URL returns organic results at the TOP
+  // LEVEL of the response body as data.organic -- an earlier version of
+  // this function used format:"json" + data_format:"parsed", which came
+  // back 200 OK but with no organic/organic_results key this code
+  // expected (a real, confirmed failure caught via testSearchProviders.js
+  // -- see, this is exactly why that script exists).
+  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&brd_json=1`;
   const response = await fetch("https://api.brightdata.com/request", {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ zone, url: searchUrl, format: "json", data_format: "parsed" }),
+    body: JSON.stringify({ zone, url: searchUrl, format: "raw" }),
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
     throw new Error(`Bright Data returned ${response.status}: ${body.slice(0, 200)}`);
   }
   const data = await response.json();
-  // Bright Data's parsed SERP JSON nests organic results -- the exact
-  // key can vary by data_format/zone config, so this checks the two
-  // most common shapes rather than assuming one.
-  const organic = data.organic || data.organic_results || [];
+  const organic = data.organic || [];
   const results = organic.slice(0, maxResults).map((r) => ({
     title: r.title || "",
     url: r.link || r.url || "",
@@ -145,7 +150,11 @@ async function searchFirecrawl(query, maxResults) {
 async function searchScraperApi(query, maxResults) {
   const apiKey = process.env.SCRAPERAPI_KEY;
   if (!apiKey) throw new Error("SCRAPERAPI_KEY is not set.");
-  const url = `https://api.scraperapi.com/structured-data/google/search?api_key=${apiKey}&query=${encodeURIComponent(query)}`;
+  // CORRECTED PATH: the real endpoint is /structured/google/search (NOT
+  // /structured-data/google/search -- an earlier version of this
+  // function used the wrong path and got a real 404, confirmed via
+  // testSearchProviders.js -- exactly why that script exists).
+  const url = `https://api.scraperapi.com/structured/google/search?api_key=${apiKey}&query=${encodeURIComponent(query)}`;
   const response = await fetch(url);
   if (!response.ok) {
     const body = await response.text().catch(() => "");
@@ -165,24 +174,24 @@ async function searchScraperApi(query, maxResults) {
 async function searchScrappa(query, maxResults) {
   const apiKey = process.env.SCRAPPA_API_KEY;
   if (!apiKey) throw new Error("SCRAPPA_API_KEY is not set.");
-  // UNVERIFIED END-TO-END: Scrappa's exact search-endpoint path/response
-  // shape wasn't confirmed against live docs this session -- this is
-  // built on the standard pattern their other structured endpoints
-  // follow (Bearer token, query param `q`). Test this against a real
-  // request and adjust the path/response parsing below if it doesn't
-  // match before relying on it in production.
-  const response = await fetch(`https://api.scrappa.co/v1/search/google?q=${encodeURIComponent(query)}&num=${maxResults}`, {
-    headers: { "Authorization": `Bearer ${apiKey}` },
+  // CORRECTED: an earlier version of this function guessed a domain
+  // (api.scrappa.co) that doesn't exist at all (confirmed via
+  // testSearchProviders.js -- a real DNS ENOTFOUND error). Scrappa's
+  // actual API is served from scrappa.co itself (no api. subdomain),
+  // and authenticates via an x-api-key header (per their own docs),
+  // not an Authorization: Bearer header.
+  const response = await fetch(`https://scrappa.co/api/search?q=${encodeURIComponent(query)}`, {
+    headers: { "x-api-key": apiKey },
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
     throw new Error(`Scrappa returned ${response.status}: ${body.slice(0, 200)}`);
   }
   const data = await response.json();
-  const organic = data.organic_results || data.results || [];
-  const results = organic.slice(0, maxResults).map((r) => ({
+  const items = data.results || [];
+  const results = items.slice(0, maxResults).map((r) => ({
     title: r.title || "",
-    url: r.link || r.url || "",
+    url: r.url || r.link || "",
     content: r.snippet || r.description || "",
   }));
   if (results.length === 0) throw new Error("Scrappa returned no results.");

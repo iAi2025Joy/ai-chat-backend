@@ -45,16 +45,16 @@ async function testBrightData() {
   const apiKey = process.env.BRIGHTDATA_API_KEY;
   if (!apiKey) throw new Error("BRIGHTDATA_API_KEY is not set.");
   const zone = process.env.BRIGHTDATA_ZONE || "serp_api1";
-  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(TEST_QUERY)}`;
+  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(TEST_QUERY)}&brd_json=1`;
   const response = await fetch("https://api.brightdata.com/request", {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ zone, url: searchUrl, format: "json", data_format: "parsed" }),
+    body: JSON.stringify({ zone, url: searchUrl, format: "raw" }),
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
   const data = await response.json();
-  const organic = data.organic || data.organic_results || [];
-  if (organic.length === 0) throw new Error("No organic results in response -- check the response shape matches what this script expects.");
+  const organic = data.organic || [];
+  if (organic.length === 0) throw new Error("No organic results in response.");
   return { count: organic.length, sample: `${organic[0].title || "(no title)"} -- ${organic[0].link || organic[0].url || "(no url)"}` };
 }
 
@@ -91,31 +91,26 @@ async function testFirecrawl() {
 async function testScraperApi() {
   const apiKey = process.env.SCRAPERAPI_KEY;
   if (!apiKey) throw new Error("SCRAPERAPI_KEY is not set.");
-  const url = `https://api.scraperapi.com/structured-data/google/search?api_key=${apiKey}&query=${encodeURIComponent(TEST_QUERY)}`;
+  const url = `https://api.scraperapi.com/structured/google/search?api_key=${apiKey}&query=${encodeURIComponent(TEST_QUERY)}`;
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
   const data = await response.json();
   const organic = data.organic_results || [];
-  if (organic.length === 0) throw new Error("No organic_results in response -- check the response shape matches what this script expects.");
+  if (organic.length === 0) throw new Error("No organic_results in response.");
   return { count: organic.length, sample: `${organic[0].title || "(no title)"} -- ${organic[0].link || "(no url)"}` };
 }
 
 async function testScrappa() {
   const apiKey = process.env.SCRAPPA_API_KEY;
   if (!apiKey) throw new Error("SCRAPPA_API_KEY is not set.");
-  // UNVERIFIED endpoint, same caveat as searchProviders.js -- this is
-  // the first real test of whether this guess is correct. A failure
-  // here specifically may mean the path/shape needs adjusting, not
-  // necessarily that the key itself is bad -- check the real error
-  // message below carefully.
-  const response = await fetch(`https://api.scrappa.co/v1/search/google?q=${encodeURIComponent(TEST_QUERY)}&num=3`, {
-    headers: { "Authorization": `Bearer ${apiKey}` },
+  const response = await fetch(`https://scrappa.co/api/search?q=${encodeURIComponent(TEST_QUERY)}`, {
+    headers: { "x-api-key": apiKey },
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
   const data = await response.json();
-  const organic = data.organic_results || data.results || [];
-  if (organic.length === 0) throw new Error("No results in response -- check the response shape matches what this script expects.");
-  return { count: organic.length, sample: `${organic[0].title || "(no title)"} -- ${organic[0].link || organic[0].url || "(no url)"}` };
+  const items = data.results || [];
+  if (items.length === 0) throw new Error("No results in response.");
+  return { count: items.length, sample: `${items[0].title || "(no title)"} -- ${items[0].url || items[0].link || "(no url)"}` };
 }
 
 async function testSerpApi() {
