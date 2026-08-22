@@ -2,6 +2,9 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import OpenAI from "openai";
+import admin from "firebase-admin";
+import { getFirebaseAdmin } from "./adminUsers.js";
+import { cacheDocId, gradeToGradeBand, EXAM_SYSTEMS } from "./examSystemCacheSeedList.js";
 import {
   getGoldPredictionToolDefinition,
   handleGoldPredictionCall,
@@ -351,8 +354,43 @@ app.post("/chat", rateLimitChat, async (req, res) => {
   };
 
   try {
-    const { message, mode, timezone: userTimezone, history, images, documents, isVoiceMode, spokenLanguageKey, schoolThorough } = req.body;
+    const { message, mode, timezone: userTimezone, history, images, documents, isVoiceMode, spokenLanguageKey, schoolThorough, schoolExamSystem, schoolSubject, schoolGrade } = req.body;
     const hasImages = Array.isArray(images) && images.length > 0;
+
+    // SCHOOL AND STUDENTS CACHE LOOKUP -- checks the monthly-refreshed
+    // examSystemCache (see refreshExamSystemCache.js) for a matching
+    // (exam system, subject, grade band) entry, and if found and not
+    // stale, adds its real syllabus summary / past-paper links /
+    // textbook references as extra system-prompt context. Deliberately
+    // best-effort: only runs for science_school, only for the six
+    // major international systems currently seeded (Phase 1 -- see
+    // examSystemCacheSeedList.js's own comment on why national/
+    // regional systems are intentionally NOT cached), and any failure
+    // here (missing Firestore credentials, no matching entry, a stale
+    // entry) just falls through to the exact same behavior as before
+    // this feature existed -- it never blocks or breaks a real answer.
+    let schoolCacheContext = null;
+    if (mode === "science_school" && EXAM_SYSTEMS.includes(schoolExamSystem)) {
+      try {
+        const gradeBand = gradeToGradeBand(schoolGrade);
+        if (gradeBand) {
+          getFirebaseAdmin();
+          const db = admin.firestore();
+          const docId = cacheDocId(schoolExamSystem, schoolSubject, gradeBand);
+          const doc = await db.collection("examSystemCache").doc(docId).get();
+          if (doc.exists) {
+            const data = doc.data();
+            const lastUpdated = data.lastUpdated && data.lastUpdated.toDate ? data.lastUpdated.toDate() : null;
+            const daysSinceUpdate = lastUpdated ? (Date.now() - lastUpdated.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
+            if (daysSinceUpdate <= 45) { // a bit past the monthly cadence, so a slightly-delayed refresh run doesn't discard an otherwise-good entry
+              schoolCacheContext = data;
+            }
+          }
+        }
+      } catch (err) {
+        console.error("School exam-system cache lookup failed (falling back to live search only, same as before this feature existed):", err.message);
+      }
+    }
 
     // A confirmed real complaint this fixes: the very first two status
     // events shown while GARNET works were always generic, fixed
@@ -904,6 +942,26 @@ app.post("/chat", rateLimitChat, async (req, res) => {
               role: "system",
               content:
                 "SCHOOL AND STUDENTS MODE -- you are GARNET's dedicated K-12 and pre-university homework/exam-prep helper. Answer questions on ANY school subject, from KG1 through Grade 12, and for ANY international curriculum/exam system the student names -- IGCSE/IG, SAT, ACT, IB (including HL/SL distinctions where relevant), AP, IP (International Programme), A-Levels, or any other named system -- matching that system's actual real syllabus, command terms, and mark-scheme expectations where you know them (e.g. IB's 'evaluate' vs 'describe' command terms genuinely expect different answer depth; SAT/ACT questions each have a specific real format that differs from one another). REAL LOCAL/REGIONAL/NATIONAL SYSTEMS: when a student names their own country's national exam system instead of (or alongside) an international one -- e.g. Tawjihi/Thanaweya Amma-style systems and other national curricula across the Arab world, or any other country's own system -- use search_web and fetch_web_page (per your standing rules on both) to actually find that specific system's real, current ministry-of-education or exam-board site, real past exam papers, and real official solutions/mark schemes, rather than guessing at a generic answer -- these students specifically benefit from being pointed to real official past papers they can practice with, so actively search for them by the system's real name plus terms like 'past papers', 'model answers', or 'ministry of education' in the relevant language. Never fabricate a past-exam question or a specific paper/session reference that wasn't actually found via a real search -- if you can't find the specific real paper being asked about, say so honestly rather than inventing one that sounds plausible. DIAGRAMS AND ILLUSTRATIONS -- LOWER THE BAR FOR THIS MODE SPECIFICALLY: your standing SHOWING IMAGES rule already says a genuinely abstract topic doesn't need forced images -- for a STUDENT learning a new concept, apply that caveat narrowly, not broadly. A physics force/free-body diagram, a labeled diagram of a cell/atom/circuit, a geometric figure, a map, a labeled anatomical diagram, a chemical structure -- these all have a real, standard visual representation even when the underlying LAW or DEFINITION being asked about sounds conceptual (e.g. \"explain Newton's laws of motion\" genuinely benefits from a real force-diagram image, the same way a genuinely visual topic would) -- call search_web_images for these proactively, the same way you would for a concrete object/place, rather than treating the topic as too abstract just because the question itself was phrased conceptually. Still use real judgment -- a pure vocabulary/definition question or a discursive essay topic doesn't need a forced image. EQUATIONS: write mathematical equations using your standing \\\\( \\\\) inline / \\\\[ \\\\] display math convention (per the MATH FORMULAS rule) so they render as real typeset math in the chat UI -- never as plain inline text like \"F = ma\" with no math delimiters, and never describe an equation in words instead of writing it. If images, Word documents, Excel files, or PDFs are attached (a photographed worksheet, a past paper, a study guide), read them accurately and answer based on their real actual content -- never fabricate a question or dataset that wasn't actually legible or attached (same standing rule as General Chat's own image-fabrication fix). Explain your reasoning step by step in a genuinely teaching way (not just the final answer) unless the student explicitly just wants a quick answer -- the goal is real understanding, not just homework completion. Match your vocabulary and depth to the stated or apparent grade level. If a specific exam system's grading/mark-scheme convention matters to how the answer should be structured (e.g. IB's command terms, showing full working for SAT/ACT/IB math, citing exact evidence for IB English), follow that convention. Be encouraging and patient, the way a good tutor is -- this is still GARNET, not a cold answer-generator.",
+            }]
+          : []),
+        // Injects the real cached syllabus/past-paper/textbook context
+        // when the lookup above found a genuinely fresh match -- a
+        // SEPARATE system message so it's clearly extra reference
+        // material, not folded into (and diluting) the main School and
+        // Students instructions above. Still just context: the model
+        // still does its own live search for the SPECIFIC question, per
+        // its standing instructions -- this only helps it start from
+        // real, already-verified background instead of from nothing.
+        ...(schoolCacheContext
+          ? [{
+              role: "system",
+              content:
+                `CACHED REFERENCE CONTEXT (refreshed within the last 45 days, for ${schoolExamSystem} ${schoolSubject}) -- ` +
+                `use this as a real, already-verified starting point for syllabus/curriculum background and past-paper awareness, ` +
+                `but still do your own live search for the SPECIFIC question being asked, and never treat this cached summary as ` +
+                `a substitute for actually answering the real question. Syllabus summary: ${schoolCacheContext.syllabusSummary || "(none)"}. ` +
+                `Real past papers on file: ${(schoolCacheContext.pastPapers || []).map((p) => `${p.title} (${p.year}): ${p.url}`).join("; ") || "(none)"}. ` +
+                `Real textbook references: ${(schoolCacheContext.textbookReferences || []).map((t) => `${t.title} by ${t.author}`).join("; ") || "(none)"}.`,
             }]
           : []),
         ...(mode === "science_research_assistant"
@@ -2182,6 +2240,43 @@ app.post("/request-password-reset", handleRequestPasswordReset);
 // just password reset). See emailVerification.js for the full "why".
 // ------------------------------------------------------------------
 app.post("/request-email-verification", handleRequestEmailVerification);
+
+// ------------------------------------------------------------------
+// EXAM SYSTEM CACHE REFRESH -- triggers the same monthly refresh job
+// as `node refreshExamSystemCache.js` (see examSystemCacheRefresher.js
+// for the real shared logic), but over HTTP so it can be triggered by
+// a completely FREE scheduler instead of Render's own Cron Jobs
+// feature, which requires a paid instance type. The intended caller is
+// a free GitHub Actions scheduled workflow (see
+// .github/workflows/monthly-exam-cache-refresh.yml) -- but this is a
+// real, unauthenticated-by-default network endpoint, so it's protected
+// by a shared secret (EXAM_CACHE_REFRESH_SECRET, set as a Render
+// environment variable the same way OPENAI_API_KEY already is) rather
+// than left open for anyone who discovers the URL to trigger and burn
+// through OpenAI credits with. This can take several minutes for the
+// full seed list (60 entries x a couple of real search rounds each) --
+// GitHub Actions' own default job timeout is well beyond that, so no
+// special handling is needed on the caller's side beyond a reasonably
+// long request timeout.
+app.post("/admin/refresh-exam-cache", async (req, res) => {
+  const providedSecret = req.headers["x-refresh-secret"];
+  const expectedSecret = process.env.EXAM_CACHE_REFRESH_SECRET;
+  if (!expectedSecret) {
+    return res.status(500).json({ error: "EXAM_CACHE_REFRESH_SECRET is not configured on this server." });
+  }
+  if (providedSecret !== expectedSecret) {
+    return res.status(401).json({ error: "Invalid or missing refresh secret." });
+  }
+  try {
+    const { runExamSystemCacheRefresh } = await import("./examSystemCacheRefresher.js");
+    const summary = await runExamSystemCacheRefresh();
+    res.json({ ok: true, summary });
+  } catch (err) {
+    console.error("Exam system cache refresh failed:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () =>
