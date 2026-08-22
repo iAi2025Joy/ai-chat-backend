@@ -11,28 +11,37 @@
 //      .github/workflows/monthly-exam-cache-refresh.yml -- filename
 //      kept for continuity even though the schedule is now daily).
 //
-// PER EXPLICIT REQUEST: refreshes ONE rotation item per day (a single
-// country OR a single international system -- see
-// examSystemCacheSeedList.js's getTodaysRotationItem, which picks the
-// day's item deterministically from the real calendar date) instead
-// of all 28 items in one monthly burst. That earlier approach needed
-// ~1,280 real search queries in one sitting, which exceeded what a
-// free search-API tier can sustain in a single run (a confirmed real
-// failure -- Serper's one-time free allowance ran out partway through
-// a run). One rotation item's 10 entries (5 subjects x 2 grade bands)
-// x 5 real searches each = ~50 queries/day, comfortably inside a real,
-// RECURRING free daily quota.
+// Refreshes ONE rotation item per day (a single country OR a single
+// international system -- see examSystemCacheSeedList.js's
+// getTodaysRotationItem, which picks the day's item deterministically
+// from the real calendar date) instead of all 28 items in one monthly
+// burst. That earlier approach needed ~1,280 real search queries in
+// one sitting, which exceeded what a free search-API tier can sustain
+// in a single run (a confirmed real failure -- Serper's one-time free
+// allowance ran out partway through a run).
 //
-// PER EXPLICIT REQUEST: uses Google's Custom Search JSON API (100
-// free queries/day, resetting daily) instead of Serper -- genuinely
-// sustainable at this job's real daily volume, unlike Serper's one-
-// time allowance. Needs GOOGLE_CUSTOM_SEARCH_API_KEY and
-// GOOGLE_CUSTOM_SEARCH_ENGINE_ID set as Render environment variables.
+// USES TAVILY (https://tavily.com), NOT Google Custom Search -- an
+// earlier version of this file used Google's API, but Google
+// discontinued free "search the entire web" for new Programmable
+// Search Engines as of January 20, 2026 (new engines are hard-capped
+// at 50 specific domains, useless for this job's need to find results
+// from any relevant site). Verified via real, current sources before
+// switching -- Tavily offers a genuine, RECURRING 1,000 free API
+// credits/month, no credit card required, resetting monthly (unlike
+// Google's discontinued option or Brave's similarly-gutted free tier,
+// both confirmed removed in early 2026). Needs TAVILY_API_KEY1 set as
+// a Render environment variable.
 //
-// PER EXPLICIT REQUEST: international systems are now part of the
-// SAME daily rotation as the Arabic countries (previously separate,
-// monthly, and Serper-based) -- both entry types get the same 5-query
-// treatment now that there's comfortable daily quota headroom for it.
+// REAL SCOPE ADJUSTMENT to fit the free budget: 3 real searches per
+// entry (syllabus, past papers, textbooks) instead of 5 -- 10 entries
+// x 3 searches x ~28 days per full rotation cycle = ~840 queries/
+// month, comfortably under Tavily's 1,000/month free limit with real
+// buffer room. The "model answers" and "study guide" searches from an
+// earlier, wider-coverage version were dropped specifically to make
+// this budget work.
+//
+// International systems are part of the SAME daily rotation as the
+// Arabic countries (previously separate and monthly).
 //
 // Still accumulates rather than overwrites (see mergeAndSave below) --
 // each day's real findings for that day's item are merged into
@@ -54,30 +63,33 @@ function getDb() {
   return admin.firestore();
 }
 
-// Google's Custom Search JSON API -- returns the same {results,
-// answerBox} shape performWebSearch (the old Serper-based function)
-// did, so the rest of this file's logic didn't need to change, just
-// the actual HTTP call underneath. Google's API has no direct
-// equivalent of Serper's "answer box" -- answerBox is always null
-// here, callers already handle that gracefully by falling back to
-// combined snippets.
-async function performGoogleSearch(query, numResults = 5) {
-  const apiKey = process.env.GOOGLE_CUSTOM_SEARCH_API_KEY;
-  const searchEngineId = process.env.GOOGLE_CUSTOM_SEARCH_ENGINE_ID;
-  if (!apiKey || !searchEngineId) {
-    throw new Error("GOOGLE_CUSTOM_SEARCH_API_KEY or GOOGLE_CUSTOM_SEARCH_ENGINE_ID is not set.");
+// Tavily's real Search API -- returns the same {results, answerBox}
+// shape the earlier Serper/Google-based versions of this file used,
+// so the rest of this file's logic didn't need to change, just the
+// actual HTTP call underneath. "basic" search_depth costs 1 credit
+// per call (vs. 2 for "advanced") -- used throughout to stay well
+// within the free monthly budget. Tavily has no direct equivalent of
+// Serper's "answer box" -- answerBox is always null here, callers
+// already handle that gracefully by falling back to combined snippets.
+async function performTavilySearch(query, maxResults = 5) {
+  const apiKey = process.env.TAVILY_API_KEY1;
+  if (!apiKey) {
+    throw new Error("TAVILY_API_KEY1 is not set.");
   }
-  const url = `https://www.googleapis.com/customsearch/v1?key=${encodeURIComponent(apiKey)}&cx=${encodeURIComponent(searchEngineId)}&q=${encodeURIComponent(query)}&num=${Math.min(numResults, 10)}`;
-  const response = await fetch(url);
+  const response = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ query, search_depth: "basic", max_results: maxResults, include_answer: false }),
+  });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(`Google Custom Search API returned ${response.status}: ${body.slice(0, 200)}`);
+    throw new Error(`Tavily API returned ${response.status}: ${body.slice(0, 200)}`);
   }
   const data = await response.json();
-  const results = (data.items || []).map((item) => ({
+  const results = (data.results || []).map((item) => ({
     title: item.title || "",
-    link: item.link || "",
-    snippet: item.snippet || "",
+    link: item.url || "",
+    snippet: item.content || "",
   }));
   return { results, answerBox: null };
 }
@@ -101,31 +113,23 @@ function mergeByUrl(existingItems, newItems) {
 
 // Shared by both entry types -- 5 real, targeted searches (syllabus,
 // past papers, model answers/mark schemes, textbooks, revision/study
-// guides), same wide coverage for both a country and an international
-// system now that there's comfortable daily quota headroom for it.
+// Shared by both entry types -- 3 real, targeted searches (syllabus,
+// past papers, textbooks), trimmed from an earlier 5-search version
+// specifically to fit Tavily's real 1,000-credit/month free budget
+// across a full 28-day rotation cycle (see this file's header comment
+// for the exact math).
 async function gatherRealData(topicQueryPrefix, subject, gradeBand) {
-  const [syllabusResult, papersResult, modelAnswersResult, textbookResult, studyGuideResult] = await Promise.all([
-    performGoogleSearch(`${topicQueryPrefix} ${subject} syllabus specification ${gradeBand}`, 3),
-    performGoogleSearch(`${topicQueryPrefix} ${subject} past papers`, 5),
-    performGoogleSearch(`${topicQueryPrefix} ${subject} model answers mark scheme`, 4),
-    performGoogleSearch(`${topicQueryPrefix} ${subject} recommended textbook`, 3),
-    performGoogleSearch(`${topicQueryPrefix} ${subject} revision study guide notes`, 3),
+  const [syllabusResult, papersResult, textbookResult] = await Promise.all([
+    performTavilySearch(`${topicQueryPrefix} ${subject} syllabus specification ${gradeBand}`, 3),
+    performTavilySearch(`${topicQueryPrefix} ${subject} past papers`, 5),
+    performTavilySearch(`${topicQueryPrefix} ${subject} recommended textbook`, 3),
   ]);
 
   const syllabusSummary = syllabusResult.results.slice(0, 2).map((r) => r.snippet).filter(Boolean).join(" ");
 
-  const newPastPapers = [
-    ...papersResult.results.slice(0, 4).map((r) => ({ title: r.title, url: r.link, snippet: r.snippet, kind: "past paper" })),
-    ...modelAnswersResult.results.slice(0, 3).map((r) => ({ title: r.title, url: r.link, snippet: r.snippet, kind: "model answers / mark scheme" })),
-  ];
-  const newTextbookReferences = [
-    ...textbookResult.results.slice(0, 3).map((r) => ({ title: r.title, url: r.link, kind: "textbook" })),
-    ...studyGuideResult.results.slice(0, 3).map((r) => ({ title: r.title, url: r.link, kind: "study guide" })),
-  ];
-  const newSourceUrls = [
-    ...syllabusResult.results, ...papersResult.results, ...modelAnswersResult.results,
-    ...textbookResult.results, ...studyGuideResult.results,
-  ].map((r) => r.link).filter(Boolean);
+  const newPastPapers = papersResult.results.slice(0, 4).map((r) => ({ title: r.title, url: r.link, snippet: r.snippet, kind: "past paper" }));
+  const newTextbookReferences = textbookResult.results.slice(0, 3).map((r) => ({ title: r.title, url: r.link, kind: "textbook" }));
+  const newSourceUrls = [...syllabusResult.results, ...papersResult.results, ...textbookResult.results].map((r) => r.link).filter(Boolean);
 
   return { syllabusSummary, newPastPapers, newTextbookReferences, newSourceUrls };
 }

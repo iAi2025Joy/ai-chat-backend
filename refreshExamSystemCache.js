@@ -3,11 +3,12 @@
 //
 // Standalone entry point -- run manually/locally with:
 //   node refreshExamSystemCache.js
-// (needs FIREBASE_SERVICE_ACCOUNT_JSON, GOOGLE_CUSTOM_SEARCH_API_KEY,
-// and GOOGLE_CUSTOM_SEARCH_ENGINE_ID -- the same environment variables
-// server.js itself already uses. No longer needs OPENAI_API_KEY or
-// SERPER_API_KEY -- this job now uses Google's Custom Search API
-// directly, see examSystemCacheRefresher.js's own comment on why.)
+// (needs FIREBASE_SERVICE_ACCOUNT_JSON and TAVILY_API_KEY1 -- the same
+// environment variables server.js itself already uses. No longer
+// needs OPENAI_API_KEY, SERPER_API_KEY, or the Google Custom Search
+// variables from an earlier version -- this job now uses Tavily's
+// Search API directly, see examSystemCacheRefresher.js's own comment
+// on why.)
 //
 // Refreshes ONE rotation item per run now (a single country or a
 // single international system, picked deterministically by the real
