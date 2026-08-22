@@ -1,56 +1,52 @@
 // webSearch.js
 // ==============
 //
-// Real web search for the chat's "Web Search" mode, using Serper.dev
-// (a Google Search Results API). Confirmed format against Serper's own
-// documentation and multiple independent, consistent developer sources:
+// Real web search for the chat's "Web Search" mode. PER EXPLICIT
+// REQUEST: no longer a single Serper.dev call -- Serper's free tier is
+// a ONE-TIME 2,500-credit signup grant, not a recurring monthly
+// allowance (confirmed against multiple independent, current sources),
+// and this account had already run it into a negative balance. Now
+// routes through performFallbackSearch() (see searchProviders.js's own
+// header comment for the full 6-provider list, order, and the exact
+// reasoning behind each one) -- tries Bright Data first (the largest
+// recurring free pool), then Tavily, Firecrawl, ScraperAPI, Scrappa,
+// and SerpApi, in that order, moving to the next on any failure
+// (missing key, non-2xx response, exhausted monthly credits, network
+// error). Combined recurring free volume across all six: ~8,750
+// queries/month, resetting monthly, vs. Serper's 2,500 ONE-TIME
+// credits before.
 //
-//   POST https://google.serper.dev/search
-//   Header: X-API-KEY: <your key>
-//   Body: { "q": "search query", "num": 5 }
-//   Response: { organic: [{ title, link, snippet, date, position }, ...],
-//               answerBox?: {...}, knowledgeGraph?: {...} }
-//
-// Free tier: 2,500 queries, no credit card required.
+// Every provider function in searchProviders.js returns the SAME
+// normalized shape regardless of which one actually answered --
+// { results: [{ title, url, content }], provider } -- so nothing below
+// this point needs to know or care which of the six actually served
+// any given request. `content` is full page text where the provider
+// supports it (Tavily, Firecrawl); for the other four (Bright Data,
+// ScraperAPI, Scrappa, SerpApi), it's their own SERP snippet -- exactly
+// as thin as Serper's snippets always were, so fetch_web_page below
+// still does the same job it always did for those.
+
+import { performFallbackSearch } from "./searchProviders.js";
 
 const SERPER_API_KEY = process.env.SERPER_API_KEY || "";
 
 export async function performWebSearch(query, numResults = 5) {
-  if (!SERPER_API_KEY) {
-    throw new Error("SERPER_API_KEY is not set.");
-  }
+  const fallback = await performFallbackSearch(query, { maxResults: numResults });
 
-  const response = await fetch("https://google.serper.dev/search", {
-    method: "POST",
-    headers: {
-      "X-API-KEY": SERPER_API_KEY,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ q: query, num: numResults }),
-  });
+  console.log(`search_web: answered by provider "${fallback.provider}" for query "${query}"`);
 
-  if (!response.ok) {
-    throw new Error(`Serper API returned ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  const results = (data.organic || []).map((item) => ({
-    title: item.title || "",
-    link: item.link || "",
-    snippet: item.snippet || "",
-    date: item.date || null,
+  const results = fallback.results.map((r) => ({
+    title: r.title || "",
+    link: r.url || "",
+    snippet: (r.content || "").slice(0, 500), // keep the model-facing block a similar size to Serper's old plain snippets; fetch_web_page still handles anything deeper
+    date: null, // none of the six providers reliably return a publish date the way Serper sometimes did -- left null rather than guessed
   }));
 
-  // Serper sometimes includes a direct "answer box" (a short, high-confidence
-  // direct answer, similar to Google's own featured snippet) -- surface it
-  // separately since it's often the most useful single piece of context.
-  const answerBox = data.answerBox
-    ? {
-        answer: data.answerBox.answer || data.answerBox.snippet || null,
-        title: data.answerBox.title || null,
-      }
-    : null;
+  // None of the six providers currently wired in return a Google-style
+  // "answer box" the way Serper occasionally did -- always null now.
+  // formatSearchResultsForModel below already handles answerBox being
+  // null gracefully (it only uses it when present).
+  const answerBox = null;
 
   return { results, answerBox };
 }
@@ -139,9 +135,21 @@ export async function handleWebSearchCall(argsJson) {
 }
 
 // ------------------------------------------------------------------
-// IMAGE SEARCH -- real image results via Serper's Images endpoint
-// (same API key as the regular web search above, same provider, just a
-// different endpoint):
+// IMAGE SEARCH -- STILL ON SERPER ONLY, READ BEFORE RELYING ON THIS:
+// none of the six providers wired into searchProviders.js for regular
+// text search (performWebSearch above) currently implement image
+// search -- extending the fallback chain to cover search_web_images
+// too is real, separate work that hasn't been done yet. This function
+// is UNCHANGED from before and still depends entirely on
+// SERPER_API_KEY -- if that account's balance is still negative (as of
+// this session), search_web_images will keep failing until either
+// Serper is topped up, or a provider with a real image-search endpoint
+// (Bright Data and SerpApi both plausibly have one -- worth checking)
+// is added to searchProviders.js and wired in here the same way
+// performWebSearch above now uses performFallbackSearch.
+//
+// Real image results via Serper's Images endpoint (same API key as the
+// regular web search above, same provider, just a different endpoint):
 //
 //   POST https://google.serper.dev/images
 //   Header: X-API-KEY: <your key>
