@@ -36,12 +36,16 @@ export const CORE_SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "Englis
 
 export const GRADE_BANDS = ["Grade 9-10", "Grade 11-12"];
 
-// The full 28-item rotation, in order: all 22 countries (Jordan
-// first), then all 6 international systems.
+// The full 28-item rotation, in exact order per explicit request:
+// Jordan alone first, then the 6 international systems (IGCSE, SAT,
+// ACT, IB, AP, A-Levels), then the remaining 21 Arab countries in
+// their existing order -- then the whole 28-day cycle repeats.
 export function buildRotationList() {
+  const [jordan, ...restOfCountries] = ARABIC_COUNTRIES; // Jordan is already first in ARABIC_COUNTRIES
   return [
-    ...ARABIC_COUNTRIES.map((country) => ({ type: "country", country })),
+    { type: "country", country: jordan },
     ...EXAM_SYSTEMS.map((examSystem) => ({ type: "international", examSystem })),
+    ...restOfCountries.map((country) => ({ type: "country", country })),
   ];
 }
 
