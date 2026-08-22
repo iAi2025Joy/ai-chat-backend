@@ -2290,6 +2290,138 @@ app.post("/admin/refresh-exam-cache", async (req, res) => {
   }
 });
 
+// ------------------------------------------------------------------
+// TEST SEARCH PROVIDERS -- a browser-visitable diagnostic endpoint,
+// added specifically because Render's Shell tab (the normal way to run
+// testSearchProviders.js directly) requires a paid Starter instance --
+// this free-tier service doesn't have it. A GET endpoint (not POST)
+// with the secret as a query parameter, PER EXPLICIT REQUEST, so it can
+// just be visited as a URL in a browser rather than needing curl or any
+// other tool. Same protection pattern as /admin/refresh-exam-cache
+// above (a shared secret), reusing that SAME env var rather than adding
+// a new one -- this is diagnostic-only (never writes anything, unlike
+// the refresh job), but still shouldn't be left open to anyone who
+// discovers the URL, since it does make 6 real outbound API calls
+// (consuming a small amount of each provider's real monthly credits)
+// every time it's visited.
+//
+// Visit: https://ai-chat-backend-garnet-26.onrender.com/admin/test-search-providers?secret=YOUR_EXAM_CACHE_REFRESH_SECRET
+//
+// Tests each of the 6 providers directly and independently (mirrors
+// testSearchProviders.js's own logic) -- one provider's failure never
+// prevents the others from being tested, so a single visit gives a
+// real pass/fail picture for all 6 keys at once.
+app.get("/admin/test-search-providers", async (req, res) => {
+  const providedSecret = req.query.secret;
+  const expectedSecret = process.env.EXAM_CACHE_REFRESH_SECRET;
+  if (!expectedSecret) {
+    return res.status(500).json({ error: "EXAM_CACHE_REFRESH_SECRET is not configured on this server." });
+  }
+  if (providedSecret !== expectedSecret) {
+    return res.status(401).json({ error: "Invalid or missing secret. Add ?secret=YOUR_EXAM_CACHE_REFRESH_SECRET to the URL." });
+  }
+
+  const TEST_QUERY = "current weather in London";
+  const results = {};
+
+  async function tryProvider(name, fn) {
+    try {
+      const r = await fn();
+      results[name] = { pass: true, ...r };
+    } catch (err) {
+      results[name] = { pass: false, error: err.message };
+    }
+  }
+
+  await tryProvider("brightdata", async () => {
+    const apiKey = process.env.BRIGHTDATA_API_KEY;
+    if (!apiKey) throw new Error("BRIGHTDATA_API_KEY is not set.");
+    const zone = process.env.BRIGHTDATA_ZONE || "serp_api1";
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(TEST_QUERY)}`;
+    const response = await fetch("https://api.brightdata.com/request", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ zone, url: searchUrl, format: "json", data_format: "parsed" }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    const data = await response.json();
+    const organic = data.organic || data.organic_results || [];
+    if (organic.length === 0) throw new Error("No organic results in response.");
+    return { count: organic.length, sample: organic[0].title || organic[0].link || "(no title)" };
+  });
+
+  await tryProvider("tavily", async () => {
+    const apiKey = process.env.TAVILY_API_KEY1;
+    if (!apiKey) throw new Error("TAVILY_API_KEY1 is not set.");
+    const response = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ query: TEST_QUERY, search_depth: "basic", max_results: 3 }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    const data = await response.json();
+    const items = data.results || [];
+    if (items.length === 0) throw new Error("No results in response.");
+    return { count: items.length, sample: items[0].title || "(no title)" };
+  });
+
+  await tryProvider("firecrawl", async () => {
+    const apiKey = process.env.FIRECRAWL_API_KEY;
+    if (!apiKey) throw new Error("FIRECRAWL_API_KEY is not set.");
+    const response = await fetch("https://api.firecrawl.dev/v1/search", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ query: TEST_QUERY, limit: 3 }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    const data = await response.json();
+    const items = data.data || [];
+    if (items.length === 0) throw new Error("No results in response.");
+    return { count: items.length, sample: items[0].title || "(no title)" };
+  });
+
+  await tryProvider("scraperapi", async () => {
+    const apiKey = process.env.SCRAPERAPI_KEY;
+    if (!apiKey) throw new Error("SCRAPERAPI_KEY is not set.");
+    const url = `https://api.scraperapi.com/structured-data/google/search?api_key=${apiKey}&query=${encodeURIComponent(TEST_QUERY)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    const data = await response.json();
+    const items = data.organic_results || [];
+    if (items.length === 0) throw new Error("No organic_results in response.");
+    return { count: items.length, sample: items[0].title || "(no title)" };
+  });
+
+  await tryProvider("scrappa", async () => {
+    const apiKey = process.env.SCRAPPA_API_KEY;
+    if (!apiKey) throw new Error("SCRAPPA_API_KEY is not set.");
+    const response = await fetch(`https://api.scrappa.co/v1/search/google?q=${encodeURIComponent(TEST_QUERY)}&num=3`, {
+      headers: { "Authorization": `Bearer ${apiKey}` },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    const data = await response.json();
+    const items = data.organic_results || data.results || [];
+    if (items.length === 0) throw new Error("No results in response.");
+    return { count: items.length, sample: items[0].title || "(no title)" };
+  });
+
+  await tryProvider("serpapi", async () => {
+    const apiKey = process.env.SERPAPI_KEY;
+    if (!apiKey) throw new Error("SERPAPI_KEY is not set.");
+    const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(TEST_QUERY)}&api_key=${apiKey}&num=3`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    const data = await response.json();
+    if (data.error) throw new Error(`SerpApi error: ${data.error}`);
+    const items = data.organic_results || [];
+    if (items.length === 0) throw new Error("No organic_results in response.");
+    return { count: items.length, sample: items[0].title || "(no title)" };
+  });
+
+  const passCount = Object.values(results).filter((r) => r.pass).length;
+  res.json({ query: TEST_QUERY, passCount, totalCount: 6, results });
+});
+
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () =>
