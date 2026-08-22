@@ -57,6 +57,20 @@ import {
   cacheDocId,
   countryCacheDocId,
 } from "./examSystemCacheSeedList.js";
+import { performFallbackSearch } from "./searchProviders.js";
+
+// PER EXPLICIT REQUEST (added alongside the 6-provider fallback chain
+// built for regular chat search, see searchProviders.js's own header
+// comment for the full provider list and why Serper was dropped):
+// this job keeps Tavily as its OWN dedicated first choice below -- its
+// 1,000 free credits/month were specifically sized for THIS job alone
+// (see this file's header comment further down for the exact math:
+// ~840 queries/month across a full 28-day rotation cycle). Only if
+// Tavily itself is down or exhausted for the month does a search here
+// fall through to the other five providers (Bright Data, Firecrawl,
+// ScraperAPI, Scrappa, SerpApi) as backup, rather than this job and
+// regular chat search competing for the same shared pool on an
+// ordinary day.
 
 function getDb() {
   getFirebaseAdmin(); // ensures admin.initializeApp() has actually run -- throws a clear error if FIREBASE_SERVICE_ACCOUNT_JSON is missing, same as adminUsers.js's own routes do
@@ -129,7 +143,7 @@ async function extractPageContent(url) {
 // entry.
 const MIN_USEFUL_CONTENT_LENGTH = 200; // shorter than this suggests extraction genuinely failed, not just a naturally short page
 
-async function performTavilySearch(query, maxResults = 5) {
+async function performTavilySearchDirect(query, maxResults) {
   const apiKey = process.env.TAVILY_API_KEY1;
   if (!apiKey) {
     throw new Error("TAVILY_API_KEY1 is not set.");
@@ -162,7 +176,35 @@ async function performTavilySearch(query, maxResults = 5) {
     }
     return { title: item.title || "", link: item.url || "", content: content.slice(0, 6000) };
   }));
+  if (results.length === 0) throw new Error("Tavily returned no results.");
   return { results, answerBox: null };
+}
+
+// Tries Tavily first (its own dedicated, best-quality path -- full
+// raw_content plus the Extract-API fallback above, both specific to
+// Tavily). Only if Tavily itself throws (missing/invalid key, non-2xx
+// response, exhausted monthly credits, network error) does this fall
+// through to the other five providers via the shared fallback chain --
+// keeping this job running even on a day Tavily's 1,000/month is
+// already spent, rather than that day's rotation item silently
+// failing outright.
+async function performTavilySearch(query, maxResults = 5) {
+  try {
+    return await performTavilySearchDirect(query, maxResults);
+  } catch (tavilyErr) {
+    console.error(`Tavily search failed, falling back to other providers: ${tavilyErr.message}`);
+    const fallback = await performFallbackSearch(query, {
+      maxResults,
+      providerOrder: ["brightdata", "firecrawl", "scraperapi", "scrappa", "serpapi"],
+    });
+    const results = fallback.results.map((r) => ({
+      title: r.title,
+      link: r.url,
+      content: (r.content || "").slice(0, 6000),
+    }));
+    console.log(`  (used fallback provider: ${fallback.provider})`);
+    return { results, answerBox: null };
+  }
 }
 
 // Merges a newly-found list of {title, url, ...} items into an
