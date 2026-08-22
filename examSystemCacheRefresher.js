@@ -85,6 +85,21 @@ function getDb() {
 // 6,000 characters is substantially more real, readable material than
 // a snippet while staying comfortably within that limit even with
 // several results per entry.
+// A confirmed real bug this fixes: some pages' markdown extraction
+// includes embedded base64-encoded images (a page's own logo/icon,
+// e.g. "![Scribd](data:image/svg+xml;base64,PD94bWwg...") -- these are
+// pure binary noise, not readable text, but can be extremely long
+// (often 10,000+ characters for a single embedded SVG), meaning a
+// single embedded image could consume the ENTIRE 6,000-character
+// content budget on its own, crowding out the actual real, useful
+// text that should have been there instead -- exactly what was
+// reported as "corrupted" content. Strips any markdown image
+// referencing a data: URI (never useful as readable text regardless
+// of format) before the length cap is applied.
+function stripEmbeddedBase64Images(text) {
+  return (text || "").replace(/!\[[^\]]*\]\(data:[^)]+\)/g, "");
+}
+
 async function performTavilySearch(query, maxResults = 5) {
   const apiKey = process.env.TAVILY_API_KEY1;
   if (!apiKey) {
@@ -104,7 +119,7 @@ async function performTavilySearch(query, maxResults = 5) {
     title: item.title || "",
     link: item.url || "",
     snippet: item.content || "",
-    rawContent: (item.raw_content || "").slice(0, 6000),
+    rawContent: stripEmbeddedBase64Images(item.raw_content || "").slice(0, 6000),
   }));
   return { results, answerBox: null };
 }
