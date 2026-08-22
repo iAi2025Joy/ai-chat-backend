@@ -17,10 +17,11 @@
 # daily single-item rotation, specifically because a monthly burst of
 # ~1,280 real search queries in one sitting exceeded what a free
 # search-API tier can sustain (a confirmed real failure). A single
-# day's item needs only ~50 queries, which comfortably fits Google's
-# real, RECURRING free daily quota (100/day) -- see
-# examSystemCacheRefresher.js for the actual Google Custom Search
-# integration that replaced Serper for this job specifically.
+# day's item needs only ~50 queries, which comfortably fits Tavily's
+# real, RECURRING free monthly quota (1,000 credits/month) -- see
+# examSystemCacheRefresher.js for the actual Tavily Search/Extract
+# integration that replaced Google Custom Search (and Serper before
+# that) for this job specifically.
 #
 # SETUP REQUIRED (one-time):
 #   1. In this GitHub repo -> Settings -> Secrets and variables ->
