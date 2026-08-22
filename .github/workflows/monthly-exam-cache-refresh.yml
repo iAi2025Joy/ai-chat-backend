@@ -46,6 +46,14 @@ jobs:
     steps:
       - name: Trigger exam system cache refresh
         run: |
-          curl -f -X POST "https://ai-chat-backend-garnet-26.onrender.com/admin/refresh-exam-cache" \
+          # Deliberately NOT using curl's -f flag here -- -f suppresses
+          # the real response body on a non-2xx status, which is
+          # exactly what made a real failure impossible to diagnose
+          # from this log alone (a confirmed real problem this fixes).
+          # -w prints the real HTTP status code after the real JSON
+          # body, so a failure shows the actual error message, not just
+          # "curl: (22) ... error: 500" with nothing else to go on.
+          curl -X POST "https://ai-chat-backend-garnet-26.onrender.com/admin/refresh-exam-cache" \
             -H "x-refresh-secret: ${{ secrets.EXAM_CACHE_REFRESH_SECRET }}" \
-            --max-time 1800
+            --max-time 1800 \
+            -w "\nHTTP status: %{http_code}\n"
