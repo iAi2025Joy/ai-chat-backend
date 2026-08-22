@@ -29,8 +29,7 @@
 #        Value: (any long random string you make up)
 #   2. In Render -> ai-chat-backend-GARNET-26 -> Environment -> add:
 #        - EXAM_CACHE_REFRESH_SECRET (same value as the GitHub secret)
-#        - GOOGLE_CUSTOM_SEARCH_API_KEY
-#        - GOOGLE_CUSTOM_SEARCH_ENGINE_ID
+#        - TAVILY_API_KEY1 (from tavily.com, free, no card required)
 #      then redeploy so the backend picks them up.
 
 name: Monthly Exam System Cache Refresh
