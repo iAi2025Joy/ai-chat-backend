@@ -660,7 +660,13 @@ export const PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS = [
 // The script also prunes old entries (see MAX_DAILY_UPDATE_CHUNKS
 // below) so this doesn't grow unbounded over time.
 // ------------------------------------------------------------------
-export const CYBERSECURITY_DAILY_UPDATE_CHUNKS = [];
+export const CYBERSECURITY_DAILY_UPDATE_CHUNKS = [
+  {
+    "id": "daily-2026-09-24-1",
+    "title": "[2026-09-24] [United States] Considerations for Critical Infrastructure Operators Working With Third-Party ICS Integrators",
+    "text": "The guidance provided by CISA outlines key considerations for critical infrastructure operators when collaborating with third-party integrators for Industrial Control Systems (ICS). It emphasizes the importance of maintaining security postures during integration and the need for effective risk management practices in order to protect critical infrastructure. (Source: CISA (US), https://www.cisa.gov/resources-tools/resources/considerations-critical-infrastructure-operators-working-third-party-ics-integrators)"
+  }
+];
 
 // Combined knowledge base actually used for retrieval (see
 // cybersecurityModel.js) -- core content first, then daily/weekly
