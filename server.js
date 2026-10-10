@@ -1643,6 +1643,8 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     formattedReply = formattedReply
       .replace(/<a\b[^>]*href=["']sandbox:[^"']*["'][^>]*>[\s\S]*?<\/a>/gi, "")
       .replace(/\[[^\]]*\]\(sandbox:[^)]*\)/gi, "")
+      .replace(/<li>\s*<\/li>/gi, "")
+      .replace(/<(ul|ol)>\s*<\/\1>/gi, "")
       .replace(/<p>\s*<\/p>/gi, "");
 
     // Charts from render_chart are appended AFTER formatting, not mixed
