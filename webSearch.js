@@ -28,8 +28,6 @@
 
 import { performFallbackSearch, searchImagesSerpApi } from "./searchProviders.js";
 
-const SERPER_API_KEY = process.env.SERPER_API_KEY || "";
-
 export async function performWebSearch(query, numResults = 5) {
   const fallback = await performFallbackSearch(query, { maxResults: numResults });
 
@@ -136,67 +134,20 @@ export async function handleWebSearchCall(argsJson) {
 
 
 // ------------------------------------------------------------------
-// IMAGE SEARCH -- Serper first, SerpApi as fallback. Serper's Images
-// endpoint stays the primary path (same account, same key already in
-// use), but now falls through to SerpApi's dedicated google_images
-// engine (via searchImagesSerpApi in searchProviders.js) if Serper
-// fails for any reason -- missing key, non-2xx response, or that
-// negative balance from earlier this session. Bright Data plausibly
-// also has an image-search-capable endpoint worth adding here later,
-// but SerpApi alone already gets this out of Serper's single point of
-// failure.
-//
-// Real image results via Serper's Images endpoint (same API key as the
-// regular web search above, same provider, just a different endpoint):
-//
-//   POST https://google.serper.dev/images
-//   Header: X-API-KEY: <your key>
-//   Body: { "q": "search query", "num": 8 }
-//   Response: { images: [{ title, imageUrl, imageWidth, imageHeight,
-//                           thumbnailUrl, source, domain, link }, ...] }
+// IMAGE SEARCH -- SerpApi's google_images engine (searchImagesSerpApi in
+// searchProviders.js). Serper was removed on purpose: its credits were a
+// ONE-TIME grant that ran out (negative balance), and only recurring
+// monthly free allowances are wanted. SerpApi's free allowance resets
+// monthly.
 //
 // Used when the user wants to actually SEE something (a place, an
 // animal, a product, a person, a diagram) rather than read about it --
 // the frontend renders these as a real image gallery, not just links.
+// Returns [{ title, imageUrl, thumbnailUrl, source, link }, ...].
 // ------------------------------------------------------------------
 
 export async function performImageSearch(query, numResults = 8) {
-  try {
-    if (!SERPER_API_KEY) {
-      throw new Error("SERPER_API_KEY is not set.");
-    }
-
-    const response = await fetch("https://google.serper.dev/images", {
-      method: "POST",
-      headers: {
-        "X-API-KEY": SERPER_API_KEY,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ q: query, num: numResults }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Serper Images API returned ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    const results = (data.images || [])
-      .filter((img) => img.imageUrl && img.thumbnailUrl) // skip any malformed entries missing a real image
-      .map((img) => ({
-        title: img.title || "",
-        imageUrl: img.imageUrl,
-        thumbnailUrl: img.thumbnailUrl,
-        source: img.domain || img.source || "",
-        link: img.link || img.imageUrl,
-      }));
-
-    if (results.length === 0) throw new Error("Serper returned no usable image results.");
-    return results;
-  } catch (serperErr) {
-    console.error(`Serper image search failed, falling back to SerpApi: ${serperErr.message}`);
-    return await searchImagesSerpApi(query, numResults);
-  }
+  return await searchImagesSerpApi(query, numResults);
 }
 
 export function getWebImageSearchToolDefinition() {
