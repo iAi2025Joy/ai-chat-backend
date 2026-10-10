@@ -78,6 +78,27 @@ export function handleCreatePdfCall(argsJson) {
     }
   }
 
+  // A document made only of headings (no paragraph, table or bullets with
+  // real text) is an empty shell, not a finished PDF -- confirmed real
+  // failure: an Arabic formula sheet was delivered containing just a title
+  // and a "table of formulas" subheading, with no table at all. Rejecting
+  // it returns an error to the model, which then has to write the real
+  // content instead of handing the person a blank-looking file.
+  const bodyTextLength = sections.reduce((total, s) => {
+    if (!s) return total;
+    if (s.type === "paragraph") return total + String(s.text || "").trim().length;
+    if (s.type === "bullets") return total + (Array.isArray(s.items) ? s.items.join(" ").trim().length : 0);
+    if (s.type === "table") return total + (Array.isArray(s.rows) ? s.rows.map((r) => (Array.isArray(r) ? r.join(" ") : "")).join(" ").trim().length : 0);
+    return total;
+  }, 0);
+  if (bodyTextLength < 40) {
+    console.error("create_pdf: validation failed -- no real body content (only headings).", "bodyTextLength:", bodyTextLength, "sectionCount:", sections.length);
+    return {
+      toolResult: JSON.stringify({ error: "This PDF has no real content -- only headings. Every heading must be followed by its actual content: paragraphs, bullets, or a table with real rows (a 'table' section needs a 'rows' array whose first row is the header). Call create_pdf again with the FULL content included." }),
+      pdfHtml: null,
+    };
+  }
+
   const payload = {
     title: title.trim(),
     sections,
