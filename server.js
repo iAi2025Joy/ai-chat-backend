@@ -630,6 +630,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // tool loop below, appended to the final reply alongside any charts.
     let renderedZipBlocksForResponse = [];
     let renderedPdfBlocksForResponse = [];
+    let renderedPdfTitles = []; // parallel to renderedPdfBlocksForResponse -- lets a re-generated PDF REPLACE its earlier draft with the same title instead of showing two identical cards
     let renderedLatexPdfBlocksForResponse = [];
 
     // DOCUMENT INTEGRITY CHECK -- a genuine code-level verification
@@ -1191,7 +1192,17 @@ app.post("/chat", rateLimitChat, async (req, res) => {
               } else {
                 const { toolResult: pdfToolResult, pdfHtml } = handleCreatePdfCall(toolCall.function.arguments);
                 toolResult = pdfToolResult;
-                if (pdfHtml) renderedPdfBlocksForResponse.push(pdfHtml);
+                if (pdfHtml) {
+                  let pdfTitleForDedupe = "";
+                  try { pdfTitleForDedupe = String(JSON.parse(toolCall.function.arguments).title || "").trim().toLowerCase(); } catch (e) { /* no title -- never deduped */ }
+                  const existingIdx = pdfTitleForDedupe ? renderedPdfTitles.indexOf(pdfTitleForDedupe) : -1;
+                  if (existingIdx >= 0) {
+                    renderedPdfBlocksForResponse[existingIdx] = pdfHtml; // newer version replaces the earlier draft
+                  } else {
+                    renderedPdfBlocksForResponse.push(pdfHtml);
+                    renderedPdfTitles.push(pdfTitleForDedupe);
+                  }
+                }
               }
             } else if (toolCall.function.name === "create_latex_pdf") {
               // Checked BEFORE the real (slow, external) compile call
@@ -1624,6 +1635,15 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // HTML version) in its conversation history, so future turns don't
     // feed GPT its own previously-rendered <p>/<ul> tags as context.
     let formattedReply = convertLinksToHTML(formatMarkdownToHTML(answer));
+
+    // The model sometimes improvises a fake "sandbox:/files/..." download
+    // link (a convention from other chat products that does not exist
+    // here -- real downloads are the cards appended below). Such a link
+    // can never work, so it is removed rather than shown as dead text.
+    formattedReply = formattedReply
+      .replace(/<a\b[^>]*href=["']sandbox:[^"']*["'][^>]*>[\s\S]*?<\/a>/gi, "")
+      .replace(/\[[^\]]*\]\(sandbox:[^)]*\)/gi, "")
+      .replace(/<p>\s*<\/p>/gi, "");
 
     // Charts from render_chart are appended AFTER formatting, not mixed
     // into `answer` beforehand -- formatMarkdownToHTML treats its input
