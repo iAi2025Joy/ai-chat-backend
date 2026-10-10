@@ -2406,7 +2406,7 @@ app.get("/admin/test-search-providers", async (req, res) => {
     if (!rawText.trim()) throw new Error(`EMPTY body (HTTP ${response.status}).`);
     let data;
     try { data = JSON.parse(rawText); } catch { throw new Error(`Non-JSON (HTTP ${response.status}): ${rawText.slice(0, 300)}`); }
-    const items = data.results || [];
+    const items = data.organic_results || data.results || [];
     if (items.length === 0) throw new Error(`No results. HTTP ${response.status}. Body start: ${rawText.slice(0, 300)}`);
     return { count: items.length, sample: items[0].title || "(no title)" };
   });

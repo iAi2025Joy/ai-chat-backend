@@ -213,10 +213,12 @@ async function searchScrappa(query, maxResults) {
     throw new Error(`Scrappa returned ${response.status}: ${body.slice(0, 200)}`);
   }
   const data = await readJsonDiagnostic(response, "Scrappa");
-  const items = data.results || [];
+  // CONFIRMED from a real response: results are under `organic_results`
+  // (each with title / link / snippet), not `results`.
+  const items = data.organic_results || data.results || [];
   const results = items.slice(0, maxResults).map((r) => ({
     title: r.title || "",
-    url: r.url || r.link || "",
+    url: r.link || r.url || "",
     content: r.snippet || r.description || "",
   }));
   if (results.length === 0) throw new Error(`Scrappa returned no results. Response keys: ${Object.keys(data).join(", ").slice(0, 200)}; body start: ${JSON.stringify(data).slice(0, 200)}`);
