@@ -66,6 +66,21 @@ const PROVIDER_ORDER = ["brightdata", "tavily", "firecrawl", "scraperapi", "scra
 // on to the next provider in PROVIDER_ORDER.
 // ------------------------------------------------------------------
 
+// Reads a provider response as text first, then parses it -- so an EMPTY
+// or non-JSON reply produces a readable error (status, content-type, start
+// of the body) instead of the opaque "Unexpected end of JSON input".
+async function readJsonDiagnostic(response, label) {
+  const text = await response.text().catch(() => "");
+  if (!text.trim()) {
+    throw new Error(`${label} returned an EMPTY response body (HTTP ${response.status}, content-type "${response.headers.get("content-type") || "none"}"). Usually means the account/zone is out of credits, rate-limited or blocked.`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error(`${label} returned non-JSON (HTTP ${response.status}): ${text.slice(0, 200)}`);
+  }
+}
+
 async function searchBrightData(query, maxResults) {
   const apiKey = process.env.BRIGHTDATA_API_KEY;
   if (!apiKey) throw new Error("BRIGHTDATA_API_KEY is not set.");
@@ -91,14 +106,14 @@ async function searchBrightData(query, maxResults) {
     const body = await response.text().catch(() => "");
     throw new Error(`Bright Data returned ${response.status}: ${body.slice(0, 200)}`);
   }
-  const data = await response.json();
+  const data = await readJsonDiagnostic(response, "Bright Data");
   const organic = data.organic || [];
   const results = organic.slice(0, maxResults).map((r) => ({
     title: r.title || "",
     url: r.link || r.url || "",
     content: r.description || r.snippet || "",
   }));
-  if (results.length === 0) throw new Error("Bright Data returned no organic results.");
+  if (results.length === 0) throw new Error(`Bright Data returned no organic results. Response keys: ${Object.keys(data).join(", ").slice(0, 200)}`);
   return { results, provider: "brightdata" };
 }
 
@@ -197,14 +212,14 @@ async function searchScrappa(query, maxResults) {
     const body = await response.text().catch(() => "");
     throw new Error(`Scrappa returned ${response.status}: ${body.slice(0, 200)}`);
   }
-  const data = await response.json();
+  const data = await readJsonDiagnostic(response, "Scrappa");
   const items = data.results || [];
   const results = items.slice(0, maxResults).map((r) => ({
     title: r.title || "",
     url: r.url || r.link || "",
     content: r.snippet || r.description || "",
   }));
-  if (results.length === 0) throw new Error("Scrappa returned no results.");
+  if (results.length === 0) throw new Error(`Scrappa returned no results. Response keys: ${Object.keys(data).join(", ").slice(0, 200)}; body start: ${JSON.stringify(data).slice(0, 200)}`);
   return { results, provider: "scrappa" };
 }
 

@@ -2344,9 +2344,12 @@ app.get("/admin/test-search-providers", async (req, res) => {
       body: JSON.stringify({ zone, url: searchUrl, format: "raw" }),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
-    const data = await response.json();
+    const rawText = await response.text();
+    if (!rawText.trim()) throw new Error(`EMPTY body (HTTP ${response.status}, content-type ${response.headers.get("content-type") || "none"}) -- usually out of credits / zone problem / blocked.`);
+    let data;
+    try { data = JSON.parse(rawText); } catch { throw new Error(`Non-JSON (HTTP ${response.status}): ${rawText.slice(0, 300)}`); }
     const organic = data.organic || [];
-    if (organic.length === 0) throw new Error("No organic results in response.");
+    if (organic.length === 0) throw new Error(`No organic results. HTTP ${response.status}. Body start: ${rawText.slice(0, 300)}`);
     return { count: organic.length, sample: organic[0].title || organic[0].link || "(no title)" };
   });
 
@@ -2399,9 +2402,12 @@ app.get("/admin/test-search-providers", async (req, res) => {
       headers: { "x-api-key": apiKey },
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
-    const data = await response.json();
+    const rawText = await response.text();
+    if (!rawText.trim()) throw new Error(`EMPTY body (HTTP ${response.status}).`);
+    let data;
+    try { data = JSON.parse(rawText); } catch { throw new Error(`Non-JSON (HTTP ${response.status}): ${rawText.slice(0, 300)}`); }
     const items = data.results || [];
-    if (items.length === 0) throw new Error("No results in response.");
+    if (items.length === 0) throw new Error(`No results. HTTP ${response.status}. Body start: ${rawText.slice(0, 300)}`);
     return { count: items.length, sample: items[0].title || "(no title)" };
   });
 
