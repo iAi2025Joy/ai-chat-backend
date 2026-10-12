@@ -243,6 +243,51 @@ export const CYBERSECURITY_CORE_KNOWLEDGE_CHUNKS = [
 // ------------------------------------------------------------------
 export const PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS = [
   {
+    "id": "privacy-weekly-2026-10-12-1",
+    "title": "[2026-10-12] [United States] [United States] FPF Submits Comments to Inform Vermont Age-Appropriate Design Code Act Rulemaking Process",
+    "text": "The Future of Privacy Forum has submitted comments to aid in the rulemaking process for Vermont's Age-Appropriate Design Code Act. This act aims to address data protection measures for minors and ensure that digital services are designed with children's safety in mind. (Source: Future of Privacy Forum, https://fpf.org/blog/fpf-submits-comments-to-inform-vermont-age-appropriate-design-code-act-rulemaking-process/)"
+  },
+  {
+    "id": "privacy-weekly-2026-10-12-2",
+    "title": "[2026-10-12] [Global] Benchmarking Privacy in Frontier AI Development",
+    "text": "The article discusses the importance of measuring and governing privacy in the context of frontier AI development and deployment. It emphasizes the need for frameworks that integrate privacy considerations into AI research and applications. (Source: Future of Privacy Forum, https://fpf.org/blog/what-gets-measured-gets-governed-benchmarking-privacy-in-frontier-ai-development-and-deployment/)"
+  },
+  {
+    "id": "privacy-weekly-2026-10-12-3",
+    "title": "[2026-10-12] [Global] New FPF Report Analyzes the Rise in Chatbot Legislation & What’s Ahead",
+    "text": "The Future of Privacy Forum has published a new report assessing the increasing legislative focus on chatbot regulations. The report outlines current trends in chatbot legislation and anticipates future developments in this area, particularly regarding data protection and ethical concerns. (Source: Future of Privacy Forum, https://fpf.org/press-releases/new-fpf-report-analyzes-the-rise-in-chatbot-legislation-whats-ahead/)"
+  },
+  {
+    "id": "privacy-weekly-2026-10-12-4",
+    "title": "[2026-10-12] [United States] [United States] Updating the Delaware Personal Data Privacy Act",
+    "text": "Delaware has announced updates to its Personal Data Privacy Act, marking a significant move in enhancing data privacy regulations. This update reflects a broader trend among U.S. states to strengthen privacy protections for residents. (Source: Future of Privacy Forum, https://fpf.org/blog/updating-the-delaware-personal-data-privacy-act-the-first-state-becomes-the-latest-to-get-a-privacy-refresh/)"
+  },
+  {
+    "id": "privacy-weekly-2026-10-12-5",
+    "title": "[2026-10-12] [United States] [United States] Colorado Proposes New AI Regulations",
+    "text": "The article discusses updates in internet privacy, highlighting California's CalPrivacy enforcement actions against data brokers and Colorado's proposal for new regulations regarding artificial intelligence. These developments signify ongoing efforts to strengthen data protection and govern AI within the U.S. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/09/internet-privacy-updates-calprivacy-fines-data-brokers-colorado-proposes-new-ai-regulations/)"
+  },
+  {
+    "id": "privacy-weekly-2026-10-12-6",
+    "title": "[2026-10-12] [United States] [United States] NYDFS Fines Licensee for Inadequate Cyber Risk Assessment",
+    "text": "The New York Department of Financial Services (NYDFS) has imposed a $250,000 fine on a licensed entity for failing to conduct adequate cyber risk assessments. This enforcement action highlights the importance of compliance with cybersecurity regulations in the financial sector. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/08/nydfs-levies-250000-fine-on-licensee-for-inadequate-cyber-risk-assessment/)"
+  },
+  {
+    "id": "privacy-weekly-2026-10-12-7",
+    "title": "[2026-10-12] [EU] [EU] The EU AI Act – when does it become enforceable now?",
+    "text": "The article discusses the enforceability timeline of the EU AI Act, outlining the key dates and implications for stakeholders involved in artificial intelligence development and deployment within the EU. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/07/the-eu-ai-act-when-does-it-become-enforceable-now/)"
+  },
+  {
+    "id": "privacy-weekly-2026-10-12-8",
+    "title": "[2026-10-12] [United States] [United States] Rhode Island’s New AI and Healthcare Privacy Law",
+    "text": "Rhode Island has enacted a new law focusing on AI and healthcare privacy, aiming to enhance data protection within the healthcare sector specifically related to AI applications. This legislation addresses concerns surrounding the use of AI in patient data handling and emphasizes the importance of privacy in healthcare. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/07/rhode-islands-new-ai-and-healthcare-privacy-law/)"
+  },
+  {
+    "id": "privacy-weekly-2026-10-12-9",
+    "title": "[2026-10-12] [Spain] [Spain] Record €18m Fine for GDPR Violations by IT Provider",
+    "text": "An IT service provider to the aviation sector has been fined €18 million by the Spanish Data Protection Agency for GDPR violations. The fine was imposed for the reuse of customer data without obtaining proper consent. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/06/record-e18m-fine-for-amadeus-from-spanish-data-protection-agency-for-gdpr-violations-related-to-use-of-traveller-data-without-consent/)"
+  },
+  {
     "id": "privacy-weekly-2026-10-05-1",
     "title": "[2026-10-05] [Global] New FPF Report Analyzes the Rise in Chatbot Legislation",
     "text": "The Future of Privacy Forum has released a report examining the increase in legislation surrounding chatbots and discusses anticipated future developments in this area. The report highlights how various jurisdictions are approaching regulations for chatbot technology, reflecting broader themes in privacy and data governance. (Source: Future of Privacy Forum, https://fpf.org/press-releases/new-fpf-report-analyzes-the-rise-in-chatbot-legislation-whats-ahead/)"
@@ -596,51 +641,6 @@ export const PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS = [
     "id": "privacy-weekly-2026-08-24-8",
     "title": "[2026-08-24] [European Union] [European Union] The EU AI Act – when does it become enforceable now?",
     "text": "The article discusses the enforcement timeline of the EU AI Act, outlining key milestones and expectations for its implementation across member states. It highlights the significance of this legislation in shaping AI governance and regulation within the EU context. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/07/the-eu-ai-act-when-does-it-become-enforceable-now/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-24-9",
-    "title": "[2026-08-24] [United States] [United States] Rhode Island’s New AI and Healthcare Privacy Law",
-    "text": "Rhode Island has enacted a new law focusing on the intersection of artificial intelligence (AI) and healthcare privacy. This legislation aims to enhance the protection of personal health information, establishing guidelines for the use of AI technologies in the healthcare sector. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/07/rhode-islands-new-ai-and-healthcare-privacy-law/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-24-10",
-    "title": "[2026-08-24] [Spain] [Spain] Record €18m fine for Amadeus from Spanish Data Protection Agency for GDPR violations",
-    "text": "The Spanish Data Protection Agency has issued a record €18 million fine to IT service provider Amadeus for reusing customer data without consent, violating GDPR regulations. This case highlights ongoing enforcement actions concerning data protection compliance in the aviation sector. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/06/record-e18m-fine-for-amadeus-from-spanish-data-protection-agency-for-gdpr-violations-related-to-use-of-traveller-data-without-consent/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-24-11",
-    "title": "[2026-08-24] [EU] Is my use case a high-risk AI system? Applying the Commission’s guidelines and next steps",
-    "text": "The article discusses the European Commission's guidelines for identifying high-risk AI systems and offers a framework for businesses to assess their AI use cases. It highlights the importance of compliance with upcoming AI regulations and the steps organizations can take to ensure they meet the necessary requirements. (Source: Norton Rose Fulbright -- Data Protection Report, https://www.dataprotectionreport.com/2026/05/is-my-use-case-a-high-risk-ai-system-applying-the-commissions-guidelines-and-next-steps/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-22-1",
-    "title": "[2026-08-22] [United States] [United States] New Jersey Becomes Third State to Regulate Data-Driven Pricing",
-    "text": "New Jersey has enacted legislation to regulate data-driven pricing, becoming the third state to do so this year. This move reflects a growing trend among U.S. states to address concerns related to data privacy and algorithmic pricing practices. (Source: Future of Privacy Forum, https://fpf.org/blog/clean-up-on-aisle-three-new-jersey-becomes-third-state-to-regulate-data-driven-pricing-this-year/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-22-2",
-    "title": "[2026-08-22] [United States] [United States] A New Design Code Takes Root in the Garden State",
-    "text": "New legislation in New Jersey, often referred to as a 'design code', is focused on enhancing children's online privacy and safety. This initiative reflects growing concerns about data protection and aims to establish stronger safeguards for minors in the digital space. (Source: Future of Privacy Forum, https://fpf.org/blog/a-new-design-code-takes-root-in-the-garden-state/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-22-3",
-    "title": "[2026-08-22] [[EU] CADA: An (E)U-turn on AI regulation] CADA: An (E)U-turn on AI regulation",
-    "text": "The Future of Privacy Forum discusses the proposed regulation of artificial intelligence under the European Union's CADA framework. The blog highlights recent developments and potential implications for AI governance in the EU. (Source: Future of Privacy Forum, https://fpf.org/blog/cada-an-eu-turn-on-ai-regulation/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-22-4",
-    "title": "[2026-08-22] [Global] Risk Assessment Framework for AI in Hiring Released",
-    "text": "The Future of Privacy Forum (FPF) along with leading companies has introduced a Risk Assessment Framework and updated best practices focused on the use of AI in hiring and employment. This initiative aims to address ethical concerns and ensure accountability in the deployment of AI technologies in the recruitment process. (Source: Future of Privacy Forum, https://fpf.org/press-releases/fpf-and-leading-companies-release-risk-assessment-framework-and-updated-best-practices-for-ai-in-hiring-employment/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-22-5",
-    "title": "[2026-08-22] FPF Statement on the Senior Chatbot Protection Bill",
-    "text": "The Future of Privacy Forum (FPF) has released a statement regarding the Senior Chatbot Protection Bill, which aims to protect older adults from potential harms associated with chatbot interactions. The statement likely discusses the bill's implications for privacy and data protection, highlighting the need for careful consideration of ethical issues in AI technologies. (Source: Future of Privacy Forum, https://fpf.org/blog/fpf-statement-on-the-senior-chatbot-protection-bill/)"
-  },
-  {
-    "id": "privacy-weekly-2026-08-22-6",
-    "title": "[2026-08-22] [[European Union] The AI Act Implementation Timeline: What Changes Under the AI Omnibus?] The AI Act Implementation Timeline: What Changes Under the AI Omnibus?",
-    "text": "The article discusses the implementation timeline of the AI Act and highlights the changes brought about by the AI Omnibus Regulation. It outlines key aspects of the regulatory framework aimed at governing AI technologies within the European Union. (Source: Future of Privacy Forum, https://fpf.org/blog/the-ai-act-implementation-timeline-what-changes-under-the-ai-omnibus/)"
   }
 ];
 
