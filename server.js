@@ -50,6 +50,7 @@ import { transcribeAudio } from "./audioTranscriber.js";
 import { getRenderChartToolDefinition, handleRenderChartCall } from "./chartTool.js";
 import { getCreateProjectZipToolDefinition, handleCreateProjectZipCall } from "./projectZipTool.js";
 import { getCreatePdfToolDefinition, handleCreatePdfCall } from "./pdfTool.js";
+import { extractHeadingsFromToolArgs, filterIntegrityViolations, formatViolations } from "./documentIntegrity.js";
 import { getCreateLatexPdfToolDefinition, handleCreateLatexPdfCall } from "./latexPdfTool.js";
 import { convertLinksToHTML, formatMarkdownToHTML } from "./textFormatting.js";
 import {
@@ -652,8 +653,14 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // and gets a real chance to regenerate correctly, the same
     // tool-call-retry pattern already used for ordinary validation
     // failures elsewhere in this file.
-    async function checkDocumentIntegrity(fullText) {
+    // Counts rejected drafts in THIS request. After two rejections only the
+    // factual-integrity checks (1 and 2) are still enforced -- see
+    // documentIntegrity.js for why a stuck judge must not be able to block a
+    // document forever.
+    let integrityRejectionCount = 0;
+    async function checkDocumentIntegrity(fullText, headingsText = "") {
       if (!fullText || fullText.trim().length < 200) return { passed: true };
+      const relaxed = integrityRejectionCount >= 2;
       try {
         const checkResp = await openai.chat.completions.create({
           model: "gpt-4o",
@@ -666,14 +673,19 @@ app.post("/chat", rateLimitChat, async (req, res) => {
                 "(2) OFF-TOPIC REFERENCES: does the references list include any citation whose real subject matter is clearly unrelated to this document's own actual topic (e.g. a citation about drones/UAVs/propulsion appearing in a paper about an unrelated subject)? " +
                 "(3) NO STANDALONE ETHICS SECTION: (ACADEMIC documents only) if the document's topic genuinely involves people, personal data, AI systems, or societal impact, is there a real section with a heading actually containing the word 'Ethics' or 'Ethical' (e.g. 'Ethics', 'Ethical Considerations')? A different section that only touches on related themes (e.g. 'Regulatory Alignment', 'Socio-Technical Governance', 'Policy Implications') does NOT satisfy this -- it must be its own explicitly-labeled section. If the topic genuinely has no meaningful ethical dimension (e.g. a pure math proof), this check does not apply. " +
                 "(4) NON-ACADEMIC REFERENCES (ACADEMIC documents only): does the references list include any blog post, LinkedIn article/post, or other social-media/non-peer-reviewed, non-archival source presented as if it were a formal academic citation? Real journals, conference proceedings (including posters), arXiv preprints, and official regulatory/standards documents are all fine -- company blogs, LinkedIn posts, and similar are not. " +
-                "Respond with ONLY a JSON object: {\"passed\": true} if none of these four violations are present, or {\"passed\": false, \"violations\": \"<specific description of exactly what's wrong and where, so it can be fixed>\"} if any are present. No other text.",
+                "List a check ONLY if you can prove it: for checks (1), (2) and (4) include an EXACT quote copied from the document text that shows the violation; for check (3) the document's real section headings are given to you below and are authoritative -- never claim a section is missing if it appears in that list. If a check is not violated, or cannot be assessed (for example there is no references section to examine), do NOT list it at all -- never write a 'violation' that says the check is not violated. " +
+                (relaxed ? "RELAXED MODE: this draft has already been revised twice, so report ONLY checks (1) and (2); treat (3) and (4) as not violated. " : "") +
+                "Respond with ONLY a JSON object: {\"violations\": [ {\"check\": <1-4>, \"quote\": \"<exact text from the document, or empty for check 3>\", \"problem\": \"<what is wrong and where, so it can be fixed>\"} ]} -- use an empty array {\"violations\": []} if none. No other text.",
             },
-            { role: "user", content: fullText.slice(0, 12000) },
+            { role: "user", content: `SECTION HEADINGS FOUND IN THE DOCUMENT (extracted by code -- authoritative):\n${headingsText || "(none found)"}\n\nDOCUMENT TEXT:\n${fullText.slice(0, 12000)}` },
           ],
           response_format: { type: "json_object" },
         });
         const parsed = JSON.parse(checkResp.choices[0].message.content);
-        return parsed.passed ? { passed: true } : { passed: false, violations: parsed.violations || "Integrity check failed." };
+        const kept = filterIntegrityViolations(parsed.violations, fullText, headingsText, relaxed);
+        if (kept.length === 0) return { passed: true };
+        integrityRejectionCount++;
+        return { passed: false, violations: formatViolations(kept) };
       } catch (err) {
         // If the check itself fails (network hiccup, bad JSON, etc.),
         // fail OPEN -- don't block a legitimate document over a broken
@@ -1174,7 +1186,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
               toolResult = chartToolResult;
               if (chartHtml) renderedChartBlocks.push(chartHtml);
             } else if (toolCall.function.name === "create_project_zip") {
-              const zipIntegrityResult = await checkDocumentIntegrity(extractPlainTextFromToolArgs("create_project_zip", toolCall.function.arguments));
+              const zipIntegrityResult = await checkDocumentIntegrity(extractPlainTextFromToolArgs("create_project_zip", toolCall.function.arguments), extractHeadingsFromToolArgs("create_project_zip", toolCall.function.arguments));
               if (!zipIntegrityResult.passed) {
                 console.error("create_project_zip: FAILED integrity check (before build):", zipIntegrityResult.violations);
                 toolResult = JSON.stringify({ error: `This draft has a real accuracy problem that must be fixed before it can be delivered: ${zipIntegrityResult.violations} Please regenerate the project with this fixed.` });
@@ -1185,7 +1197,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
                 if (zipHtml) renderedZipBlocksForResponse.push(zipHtml);
               }
             } else if (toolCall.function.name === "create_pdf") {
-              const pdfIntegrityResult = await checkDocumentIntegrity(extractPlainTextFromToolArgs("create_pdf", toolCall.function.arguments));
+              const pdfIntegrityResult = await checkDocumentIntegrity(extractPlainTextFromToolArgs("create_pdf", toolCall.function.arguments), extractHeadingsFromToolArgs("create_pdf", toolCall.function.arguments));
               if (!pdfIntegrityResult.passed) {
                 console.error("create_pdf: FAILED integrity check (before build):", pdfIntegrityResult.violations);
                 toolResult = JSON.stringify({ error: `This draft has a real accuracy problem that must be fixed before it can be delivered: ${pdfIntegrityResult.violations} Please regenerate the PDF with this fixed.` });
@@ -1210,7 +1222,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
               // specifically here -- no point spending a real
               // latex.ytotech.com compile on content that's about to be
               // rejected and regenerated anyway.
-              const latexIntegrityResult = await checkDocumentIntegrity(extractPlainTextFromToolArgs("create_latex_pdf", toolCall.function.arguments));
+              const latexIntegrityResult = await checkDocumentIntegrity(extractPlainTextFromToolArgs("create_latex_pdf", toolCall.function.arguments), extractHeadingsFromToolArgs("create_latex_pdf", toolCall.function.arguments));
               if (!latexIntegrityResult.passed) {
                 console.error("create_latex_pdf: FAILED integrity check (before compile):", latexIntegrityResult.violations);
                 toolResult = JSON.stringify({ error: `This draft has a real accuracy problem that must be fixed before it can be delivered: ${latexIntegrityResult.violations} Please regenerate the LaTeX with this fixed.` });
