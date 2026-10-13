@@ -2293,4 +2293,40 @@ app.post("/request-email-verification", handleRequestEmailVerification);
 // EXAM SYSTEM CACHE REFRESH -- triggers the same monthly refresh job
 // as `node refreshExamSystemCache.js` (see examSystemCacheRefresher.js
 // for the real shared logic), but over HTTP so it can be triggered by
-// a completely FREE scheduler instead of Render's own Cron 
+// a completely FREE scheduler instead of Render's own Cron Jobs
+// feature, which requires a paid instance type. The intended caller is
+// a free GitHub Actions scheduled workflow (see
+// .github/workflows/monthly-exam-cache-refresh.yml) -- but this is a
+// real, unauthenticated-by-default network endpoint, so it's protected
+// by a shared secret (EXAM_CACHE_REFRESH_SECRET, set as a Render
+// environment variable the same way OPENAI_API_KEY already is) rather
+// than left open for anyone who discovers the URL to trigger and burn
+// through OpenAI credits with. This can take several minutes for the
+// single day's rotation item (10 entries x a couple of real search rounds each) --
+// GitHub Actions' own default job timeout is well beyond that, so no
+// special handling is needed on the caller's side beyond a reasonably
+// long request timeout.
+app.post("/admin/refresh-exam-cache", async (req, res) => {
+  const providedSecret = req.headers["x-refresh-secret"];
+  const expectedSecret = process.env.EXAM_CACHE_REFRESH_SECRET;
+  if (!expectedSecret) {
+    return res.status(500).json({ error: "EXAM_CACHE_REFRESH_SECRET is not configured on this server." });
+  }
+  if (providedSecret !== expectedSecret) {
+    return res.status(401).json({ error: "Invalid or missing refresh secret." });
+  }
+  try {
+    const { runExamSystemCacheRefresh } = await import("./examSystemCacheRefresher.js");
+    const summary = await runExamSystemCacheRefresh();
+    res.json({ ok: true, summary });
+  } catch (err) {
+    console.error("Exam system cache refresh failed:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () =>
+  console.log(`✅ AI Chat backend running with Institute of AI knowledge and link formatting`)
+);
