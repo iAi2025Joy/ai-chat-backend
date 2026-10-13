@@ -47,11 +47,19 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
         horizon_from_now_minutes: r.horizon_from_now_min,
         spans_minutes_of_movement: r.spans_minutes_of_movement,
         valid_at_utc: r.valid_at,
+        very_likely_low: r.range_low90 != null ? Math.round(r.range_low90 * factor * 100) / 100 : null,
+        very_likely_high: r.range_high90 != null ? Math.round(r.range_high90 * factor * 100) / 100 : null,
+        very_likely_low_change_usd: r.range_low90 != null ? Math.round((r.range_low90 * factor - ref) * 100) / 100 : null,
+        very_likely_high_change_usd: r.range_high90 != null ? Math.round((r.range_high90 * factor - ref) * 100) / 100 : null,
+        very_likely_live_hit_rate: (r.live_n90 ?? 0) >= 30 ? r.live_coverage90 : null,
+        very_likely_live_scored: r.live_n90 ?? 0,
         chance_higher_pct: typeof r.chance_higher === "number" ? Math.round(r.chance_higher * 100) : null,
         chance_lower_pct: typeof r.chance_lower === "number" ? Math.round(r.chance_lower * 100) : null,
-        direction_lean_statement: typeof r.chance_higher === "number"
-          ? `About ${Math.round(r.chance_higher * 100)}% higher / ${Math.round(r.chance_lower * 100)}% lower -- no reliable lean (this only reflects how similar recent windows ended; it is not a forecast).`
-          : "Direction split not available yet -- no reliable lean.",
+        // Small leans are noise (strict tests found no direction edge), so never show them as a split.
+        direction_display: (typeof r.chance_higher === "number" && Math.abs(r.chance_higher - 0.5) >= 0.08)
+          ? `slight lean ${r.chance_higher > 0.5 ? "up" : "down"} (~${Math.round(Math.max(r.chance_higher, r.chance_lower) * 100)}%), not reliable`
+          : "about 50% / 50% (no reliable lean)",
+        direction_lean_statement: "Up and down are about equally likely -- no reliable lean (direction is not a forecast).",
         live_hit_rate: enough ? r.live_coverage : null,
         live_ranges_scored: r.live_n ?? 0,
         live_hit_rate_statement: enough
@@ -84,10 +92,10 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
 export const SHORT_TERM_RANGE_INSTRUCTION =
   "NEW DEFAULT ANSWER FORMAT FOR ANY GOLD/OIL PREDICTION, FORECAST OR OUTLOOK QUESTION -- READ THIS, HIGHEST PRIORITY, it overrides any older instruction about " +
   "answering with a single predicted price plus one range: (1) state the current price (with its label and time as instructed above); (2) present short_term_ranges " +
-  "as a table with one row per horizon -- 10, 20, 30 and 60 minutes -- with these columns: Horizon | If it falls (downside_level and downside_change_usd, e.g. '$4,181.63 (-$7.42)') | " +
-  "If it rises (upside_level and upside_change_usd, e.g. '$4,196.24 (+$7.19)') | Chance higher / lower (chance_higher_pct / chance_lower_pct) | Live accuracy (live_hit_rate_statement exactly as given); " +
+  "as a table with one row per horizon -- 10, 20, 30 and 60 minutes -- with these columns: Horizon | Likely range, 70% (downside_level to upside_level with their change_usd, e.g. '$4,181.63 (-$7.42) to $4,196.24 (+$7.19)') | " +
+  "Very likely range, 90% (very_likely_low to very_likely_high with very_likely_*_change_usd) | Up / down (direction_display exactly as given -- NEVER print chance_higher_pct/chance_lower_pct as numbers) | Live accuracy (live_hit_rate_statement exactly as given); " +
   "(3) then ONE plain sentence that states the takeaway in simple words, for example: 'Over the next 10 minutes gold is expected to stay between $X and $Y (a 70% range), a move of roughly +/- $Z from the current price -- " +
-  "up and down are about equally likely, so there is no reliable lean.' Always state it with the real numbers; (4) one short sentence explaining that each is a calibrated 70% range (the real price is expected inside it about 70% of the time) and allows for the age of the newest price data; " +
+  "up and down are about equally likely, so there is no reliable lean.' Always state it with the real numbers; (4) one short sentence explaining that the 70% range is where the real price is expected to land about 70% of the time and the 90% range about 90% of the time and allows for the age of the newest price data; " +
   "(5) not financial advice. If the user asks for 'full details', also include the data timing (base_price_as_of_utc), the method_note, and the one-hour range and accuracy facts. If short_term_ranges is null " +
   "or its status is stale_or_market_closed, say so plainly and do not invent ranges. " +
   "NEVER move, shift or re-anchor a range to make it point up or down, and NEVER start a range at the current price to imply a direction: the levels given already start from the live price and are two-sided because " +
@@ -106,8 +114,8 @@ export function buildAnswerFooter(assetName, data, shortTerm) {
     ? ` ${assetName}'s up/down calls have been right ${Math.round(data.rolling_direction_accuracy * 100)}% of the time over the last ${data.rolling_predictions_tracked} calls.`
     : "";
   return (
-    "**How to read this:** each row is a calibrated 70% range -- the real price is expected to land between the \"If it falls\" and \"If it rises\" levels about 70% of the time " +
-    "(and about 30% of the time outside them). The \"Chance higher / lower\" column only shows how similar recent windows ended; it is **not a forecast**, and there is **no reliable lean** " +
+    "**How to read this:** the real price is expected to land inside the 70% range about 70% of the time, and inside the 90% range about 90% of the time. " +
+    "The up/down column is **not a forecast**, and there is **no reliable lean** " +
     "-- up and down are about equally likely." + acc + " What the model can estimate is *how far* price may move, not *which way*. This is not financial advice."
   );
 }
