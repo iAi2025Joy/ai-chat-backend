@@ -96,3 +96,18 @@ export const SHORT_TERM_RANGE_INSTRUCTION =
   "not statistically better than assuming no change, so mention it at most as a low-confidence side note, never as the headline. " +
   "DIRECTION HONESTY -- HIGH PRIORITY: if directional_edge_status is 'unproven', NEVER present 'prediction' or 'prediction_probability_up' as a forecast or a probability, and never quote a percentage 'confidence' for direction. " +
   "ACCURACY QUESTIONS: quote only real fields -- live_hit_rate / live_hit_rate_statement for ranges, rolling_direction_accuracy for direction (with rolling_predictions_tracked) -- and be clear which is which.";
+
+
+// Pre-written, server-guaranteed closing note. GPT was observed skipping the "no reliable lean" explanation under the
+// table, which made the "Chance higher / lower" column read like a forecast -- so server.js appends this text in code.
+export function buildAnswerFooter(assetName, data, shortTerm) {
+  if (!shortTerm || shortTerm.status !== "ok") return null;
+  const acc = typeof data?.rolling_direction_accuracy === "number" && data?.rolling_predictions_tracked
+    ? ` ${assetName}'s up/down calls have been right ${Math.round(data.rolling_direction_accuracy * 100)}% of the time over the last ${data.rolling_predictions_tracked} calls.`
+    : "";
+  return (
+    "**How to read this:** each row is a calibrated 70% range -- the real price is expected to land between the \"If it falls\" and \"If it rises\" levels about 70% of the time " +
+    "(and about 30% of the time outside them). The \"Chance higher / lower\" column only shows how similar recent windows ended; it is **not a forecast**, and there is **no reliable lean** " +
+    "-- up and down are about equally likely." + acc + " What the model can estimate is *how far* price may move, not *which way*. This is not financial advice."
+  );
+}

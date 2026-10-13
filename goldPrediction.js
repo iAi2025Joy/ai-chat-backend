@@ -28,7 +28,7 @@
 // always-current price without the cost/latency of full retraining.
 
 import { fetchLiveGoldPrice } from "./liveGoldPrice.js";
-import { fetchShortTermRanges, SHORT_TERM_RANGE_INSTRUCTION } from "./shortTermRanges.js";
+import { fetchShortTermRanges, SHORT_TERM_RANGE_INSTRUCTION, buildAnswerFooter } from "./shortTermRanges.js";
 import { runLiveGoldInference } from "./goldLiveInference.js";
 
 // ------------------------------------------------------------------
@@ -471,6 +471,7 @@ export async function handleGoldPredictionCall(argsJson, userTimezone) {
     range_live_note: data.range_live_note ?? null,
     short_term_ranges: await fetchShortTermRanges("gold", freshPrice.currentPriceUsd),
   });
+  response.required_answer_footer = buildAnswerFooter("Gold", data, response.short_term_ranges);
   response.important_context_for_the_model =
     (response.important_context_for_the_model ?? "") + " " + SHORT_TERM_RANGE_INSTRUCTION;
 

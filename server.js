@@ -1118,6 +1118,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // bare statement, just the statement+note combo, or something
         // in between -- checking both catches more real cases.
         let marketClosedStatementOnly = null;
+        let requiredShortTermFooter = null;   // server-guaranteed 'how to read this' note under the short-term range table
         let closedMarketPriceLabel = null;
         let closedMarketPredictedPriceLabel = null;
 
@@ -1261,6 +1262,9 @@ app.post("/chat", rateLimitChat, async (req, res) => {
             if (toolCall.function.name === "get_gold_prediction" || toolCall.function.name === "get_oil_prediction") {
               try {
                 const parsedResult = JSON.parse(toolResult);
+                if (parsedResult.required_answer_footer) {
+                  requiredShortTermFooter = parsedResult.required_answer_footer;
+                }
                 if (parsedResult.market_closed_statement) {
                   marketClosedStatementOnly = parsedResult.market_closed_statement;
                   marketClosedPrefix = parsedResult.market_reopens_note
@@ -1344,6 +1348,13 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         answer = marketClosedPrefix
           ? `${marketClosedPrefix}\n\n${finalContent}`
           : finalContent;
+
+        // Guaranteed in code (GPT skipped this explanation, making the 'Chance higher / lower' column read like a forecast).
+        if (requiredShortTermFooter && !answer.includes("no reliable lean")) {
+          answer = `${answer}\n\n${requiredShortTermFooter}`;
+        } else if (requiredShortTermFooter && !answer.includes("not a forecast")) {
+          answer = `${answer}\n\n${requiredShortTermFooter}`;
+        }
 
         // PHRASING CONSISTENCY FIX (a confirmed real bug, observed in two
         // separate forms: (1) GPT correctly used closed-market phrasing
