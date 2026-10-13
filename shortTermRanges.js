@@ -56,9 +56,8 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
         chance_higher_pct: typeof r.chance_higher === "number" ? Math.round(r.chance_higher * 100) : null,
         chance_lower_pct: typeof r.chance_lower === "number" ? Math.round(r.chance_lower * 100) : null,
         // Small leans are noise (strict tests found no direction edge), so never show them as a split.
-        direction_display: (typeof r.chance_higher === "number" && Math.abs(r.chance_higher - 0.5) >= 0.08)
-          ? `slight lean ${r.chance_higher > 0.5 ? "up" : "down"} (~${Math.round(Math.max(r.chance_higher, r.chance_lower) * 100)}%), not reliable`
-          : "about 50% / 50% (no reliable lean)",
+        // Always neutral: strict walk-forward tests found no reliable direction edge, so no lean is ever shown.
+        direction_display: "about 50% / 50% (no reliable lean)",
         direction_lean_statement: "Up and down are about equally likely -- no reliable lean (direction is not a forecast).",
         live_hit_rate: enough ? r.live_coverage : null,
         live_ranges_scored: r.live_n ?? 0,
@@ -116,6 +115,6 @@ export function buildAnswerFooter(assetName, data, shortTerm) {
   return (
     "**How to read this:** the real price is expected to land inside the 70% range about 70% of the time, and inside the 90% range about 90% of the time. " +
     "The up/down column is **not a forecast**, and there is **no reliable lean** " +
-    "-- up and down are about equally likely." + acc + " What the model can estimate is *how far* price may move, not *which way*. This is not financial advice."
+    "-- up and down are about equally likely." + acc + " What the model can estimate is how far price may move, not which way. This is not financial advice."
   );
 }
