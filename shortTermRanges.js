@@ -11,6 +11,28 @@
 const SHORT_RANGE_RAW_URL =
   "https://raw.githubusercontent.com/iAi2025Joy/gold-predictor/main/short_range_latest.json";
 
+const DIRECTION_RECORD_URL =
+  "https://raw.githubusercontent.com/iAi2025Joy/gold-predictor/main/direction_live_record.json";
+
+// Live, self-scored up/down record: every 10 minutes an Up/Down call is saved and scored 10 minutes later against the real price.
+async function fetchDirectionRecord(asset) {
+  try {
+    const resp = await fetch(DIRECTION_RECORD_URL, { cache: "no-store" });
+    if (!resp.ok) return null;
+    const file = await resp.json();
+    const a = file?.assets?.[asset];
+    if (!a || !(a.n_scored >= 30)) return a ? { n_scored: a.n_scored ?? 0, statement: `Live direction record is still building (${a.n_scored ?? 0} calls scored so far).` } : null;
+    return {
+      n_scored: a.n_scored,
+      accuracy_pct: Math.round(a.accuracy * 1000) / 10,
+      ci95_low_pct: Math.round(a.ci95_low * 1000) / 10,
+      ci95_high_pct: Math.round(a.ci95_high * 1000) / 10,
+      beats_coin_flip_significantly: a.p_vs_coin_flip < 0.01 && a.accuracy > 0.5,
+      statement: a.statement,
+    };
+  } catch { return null; }
+}
+
 const HORIZON_KEYS = ["10min", "20min", "30min", "60min"];
 
 export async function fetchShortTermRanges(asset, livePrice = null) {
@@ -73,12 +95,15 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
           : `Live hit rate not yet reliable (${r.live_n ?? 0} scored so far); back-testing on real 5-minute data gave roughly 66-70%.`,
       };
     }
+    const direction_record = await fetchDirectionRecord(asset);
     const stale = a.status !== "ok" || fileAgeMinutes > 60;
     return {
       status: stale ? "stale_or_market_closed" : "ok",
       stale_note: stale
         ? "Short-term ranges are not current (market closed, data delayed, or the updater has not run recently). Say this plainly and do not present any range as current."
         : null,
+      direction_live_record: direction_record,
+      direction_record_statement: direction_record?.statement ?? null,
       ranges_centred_on_live_price: adjusted,
       live_price_used_for_centring: adjusted ? livePrice : null,
       futures_base_price: a.base_price ?? null,
@@ -101,7 +126,7 @@ export const SHORT_TERM_RANGE_INSTRUCTION =
   "(1) FIRST LINE, in this form: 'Gold is currently at **$4,181.55** as of **October 13, 2026, 12:00:01 PM GMT+1**. Below are the estimated price ranges for the upcoming hour:' (use the real current price and time as instructed above; 'Oil' for oil). " +
   "(2) A table, one row per horizon (10, 20, 30, 60 minutes) with columns: In | Expected price (expected_price, ONE number) | Direction & chance (direction_display EXACTLY as given, e.g. 'Down 52% (coin flip -- not reliable)') | Likely range, 70% (downside_level - upside_level) | Almost certain range, 90% (very_likely_low - very_likely_high). Plain price levels, no +/- columns. " +
   "(3) A short 'What this means' block of 2-3 plain bullets: the practical size of the move (e.g. 'Over the next 10 minutes gold will most likely stay within about $3 of the current price; over an hour, within about $5.'); " +
-  "'Likely range' = about 7 times out of 10, 'almost certain' = about 9 times out of 10; and one bullet containing the exact words 'no reliable lean': 'The up/down chance is close to 50/50 -- no reliable lean -- so treat it as a rough guide, not a promise.' " +
+  "'Likely range' = about 7 times out of 10, 'almost certain' = about 9 times out of 10; one bullet giving direction_record_statement EXACTLY as given (the live self-scored up/down record; if it is null skip this bullet), and one bullet containing the exact words 'no reliable lean': 'The up/down chance is close to 50/50 -- no reliable lean -- so treat it as a rough guide, not a promise.' " +
   "(4) One short line: 'Not financial advice.' " +
   "NEVER describe the Up/Down percentage as accuracy, confidence or a 70% success rate, and never present a direction as certain. Do not add live-accuracy columns or long explanations; only if the user asks about accuracy or 'full details' add live_hit_rate_statement / data timing (base_price_as_of_utc) / method_note. " +
   "If short_term_ranges is null or status is stale_or_market_closed, say so plainly and do not invent ranges. " +
@@ -114,5 +139,6 @@ export const SHORT_TERM_RANGE_INSTRUCTION =
 export function buildAnswerFooter(assetName, data, shortTerm) {
   if (!shortTerm || shortTerm.status !== "ok") return null;
   // Short fallback only -- appended in code when the model forgot to say there is no reliable lean.
-  return "**Note:** these are likely trading ranges, not a forecast -- up or down is a coin flip, so there is no reliable lean. Not financial advice.";
+  const rec = shortTerm.direction_record_statement ? ` ${shortTerm.direction_record_statement}` : "";
+  return `**Note:** these are likely trading ranges, not a forecast -- up or down is close to a coin flip, so there is no reliable lean.${rec} Not financial advice.`;
 }
