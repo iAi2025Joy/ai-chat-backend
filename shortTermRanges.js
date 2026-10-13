@@ -40,6 +40,11 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
         horizon_from_now_minutes: r.horizon_from_now_min,
         spans_minutes_of_movement: r.spans_minutes_of_movement,
         valid_at_utc: r.valid_at,
+        chance_higher_pct: typeof r.chance_higher === "number" ? Math.round(r.chance_higher * 100) : null,
+        chance_lower_pct: typeof r.chance_lower === "number" ? Math.round(r.chance_lower * 100) : null,
+        direction_lean_statement: typeof r.chance_higher === "number"
+          ? `About ${Math.round(r.chance_higher * 100)}% higher / ${Math.round(r.chance_lower * 100)}% lower -- no reliable lean (this only reflects how similar recent windows ended; it is not a forecast).`
+          : "Direction split not available yet -- no reliable lean.",
         live_hit_rate: enough ? r.live_coverage : null,
         live_ranges_scored: r.live_n ?? 0,
         live_hit_rate_statement: enough
@@ -72,9 +77,9 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
 export const SHORT_TERM_RANGE_INSTRUCTION =
   "NEW DEFAULT ANSWER FORMAT FOR ANY GOLD/OIL PREDICTION, FORECAST OR OUTLOOK QUESTION -- READ THIS, HIGHEST PRIORITY, it overrides any older instruction about " +
   "answering with a single predicted price plus one range: (1) state the current price (with its label and time as instructed above); (2) present short_term_ranges " +
-  "as a table with one row per horizon -- 10, 20, 30 and 60 minutes -- with columns Low, High, and Live accuracy (use live_hit_rate_statement exactly as given); " +
+  "as a table with one row per horizon -- 10, 20, 30 and 60 minutes -- with columns Low, High, Chance higher / lower (use chance_higher_pct and chance_lower_pct, e.g. '51% / 49%'), and Live accuracy (use live_hit_rate_statement exactly as given); " +
   "(3) one sentence: each is a calibrated 70% range, i.e. the real price is expected inside it about 70% of the time, and it already allows for the age of the newest " +
-  "price (spans_minutes_of_movement); (4) one sentence of direction honesty (below); (5) not financial advice. If the user asks for 'full details', also include the " +
+  "price (spans_minutes_of_movement); (4) one sentence explaining the 'Chance higher / lower' column using direction_lean_statement's wording: it shows no reliable lean, it is NOT a forecast and NOT the range's 70% (below); (5) not financial advice. If the user asks for 'full details', also include the " +
   "data timing (base_price_as_of_utc), the method_note, and the one-hour range and accuracy facts. If short_term_ranges is null or its status is stale_or_market_closed, say so plainly " +
   "and do not invent ranges. " +
   "DO NOT present predicted_price_usd as 'the prediction' or lead with it: when is_price_prediction_significant is false that single number is only a best guess that was " +
