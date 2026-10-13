@@ -89,19 +89,17 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
 }
 
 export const SHORT_TERM_RANGE_INSTRUCTION =
-  "NEW DEFAULT ANSWER FORMAT FOR ANY GOLD/OIL PREDICTION, FORECAST OR OUTLOOK QUESTION -- READ THIS, HIGHEST PRIORITY, it overrides any older instruction about " +
-  "answering with a single predicted price plus one range: (1) state the current price (with its label and time as instructed above); (2) present short_term_ranges " +
-  "as a table with one row per horizon -- 10, 20, 30 and 60 minutes -- with these columns: Horizon | Likely range, 70% (downside_level to upside_level with their change_usd, e.g. '$4,181.63 (-$7.42) to $4,196.24 (+$7.19)') | " +
-  "Very likely range, 90% (very_likely_low to very_likely_high with very_likely_*_change_usd) | Up / down (direction_display exactly as given -- NEVER print chance_higher_pct/chance_lower_pct as numbers) | Live accuracy (live_hit_rate_statement exactly as given); " +
-  "(3) then ONE plain sentence that states the takeaway in simple words, for example: 'Over the next 10 minutes gold is expected to stay between $X and $Y (a 70% range), a move of roughly +/- $Z from the current price -- " +
-  "up and down are about equally likely, so there is no reliable lean.' Always state it with the real numbers; (4) one short sentence explaining that the 70% range is where the real price is expected to land about 70% of the time and the 90% range about 90% of the time and allows for the age of the newest price data; " +
-  "(5) not financial advice. If the user asks for 'full details', also include the data timing (base_price_as_of_utc), the method_note, and the one-hour range and accuracy facts. If short_term_ranges is null " +
-  "or its status is stale_or_market_closed, say so plainly and do not invent ranges. " +
-  "NEVER move, shift or re-anchor a range to make it point up or down, and NEVER start a range at the current price to imply a direction: the levels given already start from the live price and are two-sided because " +
-  "strict testing found no reliable up/down edge. If the user asks which way price will go, say plainly that direction is no better than a coin flip, and that what the model CAN say is how far price is likely to move. " +
-  "DO NOT present predicted_price_usd as 'the prediction' or lead with it: when is_price_prediction_significant is false that single number is only a best guess that was " +
-  "not statistically better than assuming no change, so mention it at most as a low-confidence side note, never as the headline. " +
-  "DIRECTION HONESTY -- HIGH PRIORITY: if directional_edge_status is 'unproven', NEVER present 'prediction' or 'prediction_probability_up' as a forecast or a probability, and never quote a percentage 'confidence' for direction. " +
+  "NEW DEFAULT ANSWER FORMAT FOR ANY GOLD/OIL PREDICTION, FORECAST OR OUTLOOK QUESTION -- HIGHEST PRIORITY, overrides any older instruction about a single predicted price. " +
+  "KEEP IT SHORT AND PRACTICAL, in simple everyday words, no jargon. Use EXACTLY this layout: " +
+  "(1) ONE line: the current price with time, e.g. 'Gold is $4,181.55 right now (12:00 PM).' " +
+  "(2) A simple 3-column table, one row per horizon (10, 20, 30, 60 minutes): 'In' (e.g. '10 min') | 'Most likely between' (downside_level to upside_level, e.g. '$4,178.45 - $4,184.00') | 'Almost certainly between' (very_likely_low to very_likely_high). Show plain price levels only, no +/- columns, no percentages in the cells. " +
+  "(3) A short 'What this means' block of 2-3 bullets in plain words: the practical size of the expected move over the next 10 and 60 minutes (e.g. 'In the next 10 minutes, gold will most likely move less than about $3 either way; over an hour, less than about $5.'), " +
+  "that 'most likely' means roughly 7 times out of 10 and 'almost certainly' roughly 9 times out of 10, and one bullet that includes the exact words 'no reliable lean': 'Up or down is a coin flip -- no reliable lean -- so use these as the likely trading range, not a direction call.' " +
+  "(4) One short line: 'Not financial advice.' " +
+  "DO NOT include a direction column, chance percentages, a live-accuracy column, long explanations, or the method. Only if the user asks about accuracy or 'full details' add: live_hit_rate_statement / data timing (base_price_as_of_utc) / method_note. " +
+  "If short_term_ranges is null or status is stale_or_market_closed, say so plainly and do not invent ranges. " +
+  "NEVER shift or re-anchor a range to imply direction. If asked which way price will go: direction is no better than a coin flip; what the model CAN say is how far price is likely to move. " +
+  "DO NOT headline predicted_price_usd. If directional_edge_status is 'unproven', never present 'prediction' or 'prediction_probability_up' as a forecast or probability. " +
   "ACCURACY QUESTIONS: quote only real fields -- live_hit_rate / live_hit_rate_statement for ranges, rolling_direction_accuracy for direction (with rolling_predictions_tracked) -- and be clear which is which.";
 
 
@@ -109,12 +107,6 @@ export const SHORT_TERM_RANGE_INSTRUCTION =
 // table, which made the "Chance higher / lower" column read like a forecast -- so server.js appends this text in code.
 export function buildAnswerFooter(assetName, data, shortTerm) {
   if (!shortTerm || shortTerm.status !== "ok") return null;
-  const acc = typeof data?.rolling_direction_accuracy === "number" && data?.rolling_predictions_tracked
-    ? ` ${assetName}'s up/down calls have been right ${Math.round(data.rolling_direction_accuracy * 100)}% of the time over the last ${data.rolling_predictions_tracked} calls.`
-    : "";
-  return (
-    "**How to read this:** the real price is expected to land inside the 70% range about 70% of the time, and inside the 90% range about 90% of the time. " +
-    "The up/down column is **not a forecast**, and there is **no reliable lean** " +
-    "-- up and down are about equally likely." + acc + " What the model can estimate is how far price may move, not which way. This is not financial advice."
-  );
+  // Short fallback only -- appended in code when the model forgot to say there is no reliable lean.
+  return "**Note:** these are likely trading ranges, not a forecast -- up or down is a coin flip, so there is no reliable lean. Not financial advice.";
 }

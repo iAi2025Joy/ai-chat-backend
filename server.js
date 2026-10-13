@@ -1352,8 +1352,6 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // Guaranteed in code (GPT skipped this explanation, making the 'Chance higher / lower' column read like a forecast).
         if (requiredShortTermFooter && !answer.includes("no reliable lean")) {
           answer = `${answer}\n\n${requiredShortTermFooter}`;
-        } else if (requiredShortTermFooter && !answer.includes("not a forecast")) {
-          answer = `${answer}\n\n${requiredShortTermFooter}`;
         }
 
         // PHRASING CONSISTENCY FIX (a confirmed real bug, observed in two
