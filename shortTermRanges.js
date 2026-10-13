@@ -13,7 +13,7 @@ const SHORT_RANGE_RAW_URL =
 
 const HORIZON_KEYS = ["10min", "20min", "30min", "60min"];
 
-export async function fetchShortTermRanges(asset) {
+export async function fetchShortTermRanges(asset, livePrice = null) {
   try {
     const resp = await fetch(SHORT_RANGE_RAW_URL, { cache: "no-store" });
     if (!resp.ok) return null;
@@ -21,6 +21,13 @@ export async function fetchShortTermRanges(asset) {
     const a = file?.assets?.[asset];
     if (!a) return null;
     const fileAgeMinutes = Math.round((Date.now() - Date.parse(file.updated_at)) / 60000);
+    // BASIS FIX: the ranges are built from Yahoo FUTURES prices (GC=F / CL=F), which sit a little above/below
+    // the live SPOT price GARNET shows (for gold, futures trade ~$15-30 over spot). To keep the table consistent with
+    // the live price, each range is converted to a % move from its own base price and re-applied to the live price.
+    const base = a.base_price;
+    const factor = (typeof livePrice === "number" && livePrice > 0 && typeof base === "number" && base > 0
+      && Math.abs(livePrice / base - 1) < 0.05) ? livePrice / base : 1;
+    const adjusted = factor !== 1;
     const ranges = {};
     for (const k of HORIZON_KEYS) {
       const r = a.ranges?.[k];
@@ -28,8 +35,8 @@ export async function fetchShortTermRanges(asset) {
       const enough = (r.live_n ?? 0) >= 30;
       ranges[k] = {
         available: true,
-        range_low: r.range_low,
-        range_high: r.range_high,
+        range_low: Math.round(r.range_low * factor * 100) / 100,
+        range_high: Math.round(r.range_high * factor * 100) / 100,
         horizon_from_now_minutes: r.horizon_from_now_min,
         spans_minutes_of_movement: r.spans_minutes_of_movement,
         valid_at_utc: r.valid_at,
@@ -46,7 +53,9 @@ export async function fetchShortTermRanges(asset) {
       stale_note: stale
         ? "Short-term ranges are not current (market closed, data delayed, or the updater has not run recently). Say this plainly and do not present any range as current."
         : null,
-      base_price_used: a.base_price ?? null,
+      ranges_centred_on_live_price: adjusted,
+      live_price_used_for_centring: adjusted ? livePrice : null,
+      futures_base_price: a.base_price ?? null,
       base_price_as_of_utc: a.data_as_of ?? null,
       base_price_age_minutes: a.data_age_minutes ?? null,
       ranges_file_age_minutes: fileAgeMinutes,

@@ -285,7 +285,7 @@ export async function handleOilPredictionCall(userTimezone) {
     range_live_coverage: data.range_live_coverage ?? null,
     range_live_n: data.range_live_n ?? null,
     range_live_note: data.range_live_note ?? null,
-    short_term_ranges: await fetchShortTermRanges("oil"),
+    short_term_ranges: await fetchShortTermRanges("oil", freshPrice.currentPriceUsd),
   });
   response.important_context_for_the_model =
     (response.important_context_for_the_model ?? "") + " " + SHORT_TERM_RANGE_INSTRUCTION;

@@ -347,22 +347,19 @@ export async function handleGoldPredictionCall(argsJson, userTimezone) {
       : null;
     const currentStr = fmtUsd(freshPrice.currentPriceUsd);
     const predictedStr = fmtUsd(freshPrice.predictedPriceUsd);
-    if (currentStr && predictedStr) {
-      // Defensive multi-name lookup -- the exact property names on this
-      // object weren't directly confirmed from the Python source at
-      // the time this was written, so several plausible names are
-      // tried; if none match, the range clause is simply omitted
-      // rather than risking a wrong/undefined value being shown.
-      const ivRange = data.implied_volatility_expected_range || {};
-      const rangeLow = ivRange.implied_price_range_low ?? ivRange.low ?? ivRange.range_low ?? null;
-      const rangeHigh = ivRange.implied_price_range_high ?? ivRange.high ?? ivRange.range_high ?? null;
-      const rangeLowStr = fmtUsd(rangeLow);
-      const rangeHighStr = fmtUsd(rangeHigh);
-      const rangeClause = (rangeLowStr && rangeHighStr)
-        ? `, with a likely range of ${rangeLowStr} to ${rangeHighStr}`
+    if (currentStr) {
+      // HONEST HEADLINE (replaces the old "model's specific price estimate ... likely range" sentence).
+      // Strict walk-forward testing found no reliable direction or point-price edge, so the headline
+      // gives the current price and points to calibrated ranges (the short_term_ranges table follows).
+      const liveAcc = typeof data.rolling_direction_accuracy === "number" && data.rolling_predictions_tracked
+        ? ` (its live record is ${Math.round(data.rolling_direction_accuracy * 100)}% over the last ${data.rolling_predictions_tracked} calls)`
         : "";
+      const unproven = data.directional_edge_status === "unproven" || data.is_statistically_significant === false;
       unifiedPredictionHeadline =
-        `Gold is currently at ${currentStr}. The model's specific price estimate for the next hourly update is ${predictedStr}${rangeClause}.`;
+        `Gold is currently at ${currentStr}. ` +
+        (unproven
+          ? `The up/down direction is no better than a coin flip${liveAcc}, so instead of a single price forecast here are calibrated price ranges: each is a 70% range, meaning the real price is expected to land inside it about 70% of the time, and each already allows for the age of the newest price data.`
+          : `Here are calibrated price ranges: each is a 70% range, meaning the real price is expected to land inside it about 70% of the time.`);
     }
   }
 
@@ -469,11 +466,10 @@ export async function handleGoldPredictionCall(argsJson, userTimezone) {
     directional_edge_status: data.directional_edge_status ?? null,
     directional_signal_summary: data.directional_signal_summary ?? null,
     directional_edge_research_note: data.directional_edge_research_note ?? null,
-    calibrated_range_latest_run: data.calibrated_range ?? null,
     range_live_coverage: data.range_live_coverage ?? null,
     range_live_n: data.range_live_n ?? null,
     range_live_note: data.range_live_note ?? null,
-    short_term_ranges: await fetchShortTermRanges("gold"),
+    short_term_ranges: await fetchShortTermRanges("gold", freshPrice.currentPriceUsd),
   });
   response.important_context_for_the_model =
     (response.important_context_for_the_model ?? "") + " " + SHORT_TERM_RANGE_INSTRUCTION;
