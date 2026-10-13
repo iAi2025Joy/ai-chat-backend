@@ -56,8 +56,15 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
         chance_higher_pct: typeof r.chance_higher === "number" ? Math.round(r.chance_higher * 100) : null,
         chance_lower_pct: typeof r.chance_lower === "number" ? Math.round(r.chance_lower * 100) : null,
         // Small leans are noise (strict tests found no direction edge), so never show them as a split.
-        // Always neutral: strict walk-forward tests found no reliable direction edge, so no lean is ever shown.
-        direction_display: "about 50% / 50% (no reliable lean)",
+        // One practical number per horizon: the middle of the 70% range.
+        expected_price: Math.round(((r.range_low + r.range_high) / 2) * factor * 100) / 100,
+        // Direction + chance, shown honestly: it comes from how similar recent windows ended, and strict tests found
+        // it is NOT reliable (about a coin flip), so it is always tagged as such.
+        direction_word: typeof r.chance_higher === "number" ? (r.chance_higher >= 0.5 ? "Up" : "Down") : null,
+        direction_chance_pct: typeof r.chance_higher === "number" ? Math.round(Math.max(r.chance_higher, r.chance_lower) * 100) : null,
+        direction_display: typeof r.chance_higher === "number"
+          ? `${r.chance_higher >= 0.5 ? "Up" : "Down"} ${Math.round(Math.max(r.chance_higher, r.chance_lower) * 100)}% (${Math.abs(r.chance_higher - 0.5) < 0.08 ? "coin flip" : "weak lean"} -- not reliable)`
+          : "about 50% / 50% (no reliable lean)",
         direction_lean_statement: "Up and down are about equally likely -- no reliable lean (direction is not a forecast).",
         live_hit_rate: enough ? r.live_coverage : null,
         live_ranges_scored: r.live_n ?? 0,
@@ -90,16 +97,15 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
 
 export const SHORT_TERM_RANGE_INSTRUCTION =
   "NEW DEFAULT ANSWER FORMAT FOR ANY GOLD/OIL PREDICTION, FORECAST OR OUTLOOK QUESTION -- HIGHEST PRIORITY, overrides any older instruction about a single predicted price. " +
-  "KEEP IT SHORT AND PRACTICAL, in simple everyday words, no jargon. Use EXACTLY this layout: " +
-  "(1) ONE line: the current price with time, e.g. 'Gold is $4,181.55 right now (12:00 PM).' " +
-  "(2) A simple 3-column table, one row per horizon (10, 20, 30, 60 minutes): 'In' (e.g. '10 min') | 'Most likely between' (downside_level to upside_level, e.g. '$4,178.45 - $4,184.00') | 'Almost certainly between' (very_likely_low to very_likely_high). Show plain price levels only, no +/- columns, no percentages in the cells. " +
-  "(3) A short 'What this means' block of 2-3 bullets in plain words: the practical size of the expected move over the next 10 and 60 minutes (e.g. 'In the next 10 minutes, gold will most likely move less than about $3 either way; over an hour, less than about $5.'), " +
-  "that 'most likely' means roughly 7 times out of 10 and 'almost certainly' roughly 9 times out of 10, and one bullet that includes the exact words 'no reliable lean': 'Up or down is a coin flip -- no reliable lean -- so use these as the likely trading range, not a direction call.' " +
+  "KEEP IT SHORT AND PRACTICAL, in simple everyday words. Use EXACTLY this layout: " +
+  "(1) FIRST LINE, in this form: 'Gold is currently at **$4,181.55** as of **October 13, 2026, 12:00:01 PM GMT+1**. Below are the estimated price ranges for the upcoming hour:' (use the real current price and time as instructed above; 'Oil' for oil). " +
+  "(2) A table, one row per horizon (10, 20, 30, 60 minutes) with columns: In | Expected price (expected_price, ONE number) | Direction & chance (direction_display EXACTLY as given, e.g. 'Down 52% (coin flip -- not reliable)') | Likely range, 70% (downside_level - upside_level) | Almost certain range, 90% (very_likely_low - very_likely_high). Plain price levels, no +/- columns. " +
+  "(3) A short 'What this means' block of 2-3 plain bullets: the practical size of the move (e.g. 'Over the next 10 minutes gold will most likely stay within about $3 of the current price; over an hour, within about $5.'); " +
+  "'Likely range' = about 7 times out of 10, 'almost certain' = about 9 times out of 10; and one bullet containing the exact words 'no reliable lean': 'The up/down chance is close to 50/50 -- no reliable lean -- so treat it as a rough guide, not a promise.' " +
   "(4) One short line: 'Not financial advice.' " +
-  "DO NOT include a direction column, chance percentages, a live-accuracy column, long explanations, or the method. Only if the user asks about accuracy or 'full details' add: live_hit_rate_statement / data timing (base_price_as_of_utc) / method_note. " +
+  "NEVER describe the Up/Down percentage as accuracy, confidence or a 70% success rate, and never present a direction as certain. Do not add live-accuracy columns or long explanations; only if the user asks about accuracy or 'full details' add live_hit_rate_statement / data timing (base_price_as_of_utc) / method_note. " +
   "If short_term_ranges is null or status is stale_or_market_closed, say so plainly and do not invent ranges. " +
-  "NEVER shift or re-anchor a range to imply direction. If asked which way price will go: direction is no better than a coin flip; what the model CAN say is how far price is likely to move. " +
-  "DO NOT headline predicted_price_usd. If directional_edge_status is 'unproven', never present 'prediction' or 'prediction_probability_up' as a forecast or probability. " +
+  "NEVER shift or re-anchor a range to imply direction. DO NOT headline predicted_price_usd. If directional_edge_status is 'unproven', never present 'prediction' or 'prediction_probability_up' as a forecast or probability. " +
   "ACCURACY QUESTIONS: quote only real fields -- live_hit_rate / live_hit_rate_statement for ranges, rolling_direction_accuracy for direction (with rolling_predictions_tracked) -- and be clear which is which.";
 
 
