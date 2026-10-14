@@ -62,6 +62,63 @@ export function buildAnswerExtras(events, ctx) {
   return { events_line, news_block };
 }
 
+
+const EVENT_CALENDAR_URL =
+  "https://raw.githubusercontent.com/iAi2025Joy/gold-predictor/main/event_calendar.json";
+const HEADLINES_URL =
+  "https://raw.githubusercontent.com/iAi2025Joy/gold-predictor/main/market_headlines.json";
+
+function humanWhen(ms) {
+  const mins = Math.round(ms / 60000);
+  if (mins < 1) return "right now";
+  if (mins < 60) return `in about ${mins} minutes`;
+  const h = Math.round(mins / 6) / 10;
+  return `in about ${h} hours`;
+}
+
+// Scheduled releases (CPI, jobs, central banks...) still to come in the next 6 hours. Never throws; returns [] on any problem.
+async function fetchUpcomingEvents() {
+  try {
+    const resp = await fetch(EVENT_CALENDAR_URL, { cache: "no-store" });
+    if (!resp.ok) return [];
+    const file = await resp.json();
+    const now = Date.now();
+    return (file?.events || [])
+      .map((e) => ({ e, ms: Date.parse(e.time_utc) - now }))
+      .filter((x) => Number.isFinite(x.ms) && x.ms >= -60000 && x.ms <= 6 * 3600 * 1000 && (x.e.impact === "high" || x.e.impact === "medium"))
+      .sort((a, b) => a.ms - b.ms)
+      .slice(0, 8)
+      .map((x) => ({ title: x.e.title, country: x.e.country, impact: x.e.impact, time_utc: x.e.time_utc,
+        forecast: x.e.forecast ?? null, previous: x.e.previous ?? null, when_text: humanWhen(x.ms) }));
+  } catch { return []; }
+}
+
+function ageText(ms) {
+  const mins = Math.max(0, Math.round(ms / 60000));
+  if (mins < 60) return `${mins} min ago`;
+  const h = Math.round(mins / 60);
+  return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
+}
+
+// Recent headlines for this asset (last 24 h, newest first, max 6). Quoted as published; context only.
+async function fetchHeadlines(asset) {
+  try {
+    const resp = await fetch(HEADLINES_URL, { cache: "no-store" });
+    if (!resp.ok) return { headlines: [] };
+    const file = await resp.json();
+    const now = Date.now();
+    const headlines = (file?.[asset] || [])
+      .map((h) => ({ h, ms: now - Date.parse(h.published) }))
+      .filter((x) => Number.isFinite(x.ms) && x.ms >= 0 && x.ms <= 24 * 3600 * 1000)
+      .sort((a, b) => a.ms - b.ms)
+      .slice(0, 6)
+      .map((x) => ({ headline: x.h.title, source: x.h.source, age_text: ageText(x.ms) }));
+    return { headlines, note: file?.note ?? null };
+  } catch { return { headlines: [] }; }
+}
+
+export const DISCLAIMER = "This is not financial advice. Do your own analysis before taking your investment decisions.";
+
 const HORIZON_KEYS = ["10min", "20min", "30min", "60min"];
 
 export async function fetchShortTermRanges(asset, livePrice = null) {
