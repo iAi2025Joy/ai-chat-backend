@@ -1118,6 +1118,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // bare statement, just the statement+note combo, or something
         // in between -- checking both catches more real cases.
         let marketClosedStatementOnly = null;
+        let requiredShortTermExtras = null;      // {events_line, news_block} appended verbatim in code
         let requiredShortTermDirRecord = null;   // live self-scored up/down record sentence
         let requiredShortTermFooter = null;   // server-guaranteed 'how to read this' note under the short-term range table
         let closedMarketPriceLabel = null;
@@ -1266,6 +1267,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
                 if (parsedResult.required_answer_footer) {
                   requiredShortTermFooter = parsedResult.required_answer_footer;
                   requiredShortTermDirRecord = parsedResult.short_term_ranges?.direction_record_statement || null;
+                  requiredShortTermExtras = parsedResult.short_term_ranges?.answer_extras || null;
                 }
                 if (parsedResult.market_closed_statement) {
                   marketClosedStatementOnly = parsedResult.market_closed_statement;
@@ -1351,17 +1353,24 @@ app.post("/chat", rateLimitChat, async (req, res) => {
           ? `${marketClosedPrefix}\n\n${finalContent}`
           : finalContent;
 
-        // Guaranteed in code (GPT skipped this explanation, making the 'Chance higher / lower' column read like a forecast).
-        if (requiredShortTermFooter && !answer.includes("no reliable lean")) {
-          answer = `${answer}\n\n${requiredShortTermFooter}`;
-        } else if (requiredShortTermFooter) {
-          // The note is present; still guarantee the live direction record sentence and the closing disclaimer.
-          if (requiredShortTermDirRecord && !answer.includes("Live direction record")) {
+        // Guaranteed in code (GPT skips optional sections): the "no reliable lean" note, the live direction record, scheduled
+        // events, news headlines (quoted verbatim), and the closing disclaimer, which is always the LAST line.
+        if (requiredShortTermFooter) {
+          const DISCLAIMER = "This is not financial advice. Do your own analysis before taking your investment decisions.";
+          // take any disclaimer the model wrote off the end so it can be re-added last
+          answer = answer.replace(/\n*\s*\*?This is not financial advice\.?[^\n]*\*?\s*$/i, "").trimEnd();
+          if (!answer.includes("no reliable lean")) {
+            answer = `${answer}\n\n${requiredShortTermFooter.replace(DISCLAIMER, "").trim()}`;
+          } else if (requiredShortTermDirRecord && !answer.includes("Live direction record")) {
             answer = `${answer}\n\n${requiredShortTermDirRecord}`;
           }
-          if (!/do your own analysis/i.test(answer)) {
-            answer = `${answer}\n\nThis is not financial advice. Do your own analysis before taking your investment decisions.`;
+          if (requiredShortTermExtras?.events_line && !/scheduled event/i.test(answer)) {
+            answer = `${answer}\n\n${requiredShortTermExtras.events_line}`;
           }
+          if (requiredShortTermExtras?.news_block && !/what is in the news/i.test(answer)) {
+            answer = `${answer}\n\n${requiredShortTermExtras.news_block}`;
+          }
+          answer = `${answer}\n\n${DISCLAIMER}`;
         }
 
         // PHRASING CONSISTENCY FIX (a confirmed real bug, observed in two
