@@ -35,6 +35,50 @@ async function fetchDirectionRecord(asset) {
 
 export const DISCLAIMER = "This is not financial advice. Do your own analysis before taking your investment decisions.";
 
+const EVENT_CALENDAR_URL =
+  "https://raw.githubusercontent.com/iAi2025Joy/gold-predictor/main/event_calendar.json";
+const HEADLINES_URL =
+  "https://raw.githubusercontent.com/iAi2025Joy/gold-predictor/main/market_headlines.json";
+
+// Scheduled economic events in the next 24 hours (or released in the last 30 minutes): context + the reason ranges may be widened.
+async function fetchUpcomingEvents() {
+  try {
+    const resp = await fetch(EVENT_CALENDAR_URL, { cache: "no-store" });
+    if (!resp.ok) return null;
+    const file = await resp.json();
+    const now = Date.now();
+    const events = (file.events || [])
+      .map((e) => ({ ...e, minutes_until: Math.round((Date.parse(e.time_utc) - now) / 60000) }))
+      .filter((e) => e.minutes_until >= -30 && e.minutes_until <= 24 * 60)
+      .sort((a, b) => (a.impact === b.impact ? a.minutes_until - b.minutes_until : a.impact === "high" ? -1 : 1))
+      .slice(0, 4)
+      .map((e) => ({
+        title: e.title, country: e.country, impact: e.impact,
+        when_text: e.minutes_until < 0 ? `released ${-e.minutes_until} minutes ago`
+          : e.minutes_until < 90 ? `in about ${e.minutes_until} minutes`
+          : `in about ${Math.round(e.minutes_until / 60)} hours`,
+        forecast: e.forecast, previous: e.previous,
+      }));
+    return events;
+  } catch { return null; }
+}
+
+// Latest relevant headlines (last 24 h) -- CONTEXT ONLY, never used in any number.
+async function fetchHeadlines(asset) {
+  try {
+    const resp = await fetch(HEADLINES_URL, { cache: "no-store" });
+    if (!resp.ok) return null;
+    const file = await resp.json();
+    const now = Date.now();
+    const rows = (file[asset] || [])
+      .map((h) => ({ ...h, age_hours: h.published ? Math.round((now - Date.parse(h.published)) / 360000) / 10 : null }))
+      .filter((h) => h.age_hours === null || (h.age_hours >= 0 && h.age_hours <= 24))
+      .slice(0, 6)
+      .map((h) => ({ headline: h.title, source: h.source || "unknown", age_text: h.age_hours === null ? "recent" : `${h.age_hours < 1 ? "under 1" : Math.round(h.age_hours)} hours ago` }));
+    return { fetched_at: file.updated_at, headlines: rows };
+  } catch { return null; }
+}
+
 const HORIZON_KEYS = ["10min", "20min", "30min", "60min"];
 
 export async function fetchShortTermRanges(asset, livePrice = null) {
@@ -71,6 +115,7 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
         horizon_from_now_minutes: r.horizon_from_now_min,
         spans_minutes_of_movement: r.spans_minutes_of_movement,
         valid_at_utc: r.valid_at,
+        widened_for: r.widened_for ?? null,
         very_likely_low: r.range_low90 != null ? Math.round(r.range_low90 * factor * 100) / 100 : null,
         very_likely_high: r.range_high90 != null ? Math.round(r.range_high90 * factor * 100) / 100 : null,
         very_likely_low_change_usd: r.range_low90 != null ? Math.round((r.range_low90 * factor - ref) * 100) / 100 : null,
@@ -98,12 +143,16 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
       };
     }
     const direction_record = await fetchDirectionRecord(asset);
+    const upcoming_events = await fetchUpcomingEvents();
+    const market_context = await fetchHeadlines(asset);
     const stale = a.status !== "ok" || fileAgeMinutes > 60;
     return {
       status: stale ? "stale_or_market_closed" : "ok",
       stale_note: stale
         ? "Short-term ranges are not current (market closed, data delayed, or the updater has not run recently). Say this plainly and do not present any range as current."
         : null,
+      upcoming_events,
+      market_context,
       direction_live_record: direction_record,
       direction_record_statement: direction_record?.statement ?? null,
       ranges_centred_on_live_price: adjusted,
@@ -128,8 +177,8 @@ export const SHORT_TERM_RANGE_INSTRUCTION =
   "(1) FIRST LINE, in this form: 'Gold is currently at **$4,181.55** as of **October 13, 2026, 12:00:01 PM GMT+1**. Below are the estimated price ranges for the upcoming hour:' (use the real current price and time as instructed above; 'Oil' for oil). " +
   "(2) A table, one row per horizon (10, 20, 30, 60 minutes) with columns: In | Expected price (expected_price, ONE number) | Direction & chance (direction_display EXACTLY as given, e.g. 'Down 52% (coin flip -- not reliable)') | Likely range, 70% (downside_level - upside_level) | Almost certain range, 90% (very_likely_low - very_likely_high). Plain price levels, no +/- columns. " +
   "(3) A short 'What this means' block of 2-3 plain bullets: the practical size of the move (e.g. 'Over the next 10 minutes gold will most likely stay within about $3 of the current price; over an hour, within about $5.' -- use the LARGER of the up/down change_usd values for each horizon, rounded up); " +
-  "'Likely range' = about 7 times out of 10, 'almost certain' = about 9 times out of 10; one bullet giving direction_record_statement EXACTLY as given, ALWAYS, even when it only says the record is still building (the live self-scored up/down record; skip only if it is null), and one bullet containing the exact words 'no reliable lean': 'The up/down chance is close to 50/50 -- no reliable lean -- so treat it as a rough guide, not a promise.' " +
-  "(4) The LAST line of the answer, in plain text with no asterisks or italics, EXACTLY: 'This is not financial advice. Do your own analysis before taking your investment decisions.' " +
+  "'Likely range' = about 7 times out of 10, 'almost certain' = about 9 times out of 10; one bullet giving direction_record_statement EXACTLY as given, ALWAYS, even when it only says the record is still building (the live self-scored up/down record; skip only if it is null), and, when upcoming_events is a non-empty list, ONE bullet naming the most important event(s) with their when_text (e.g. 'US CPI is due in about 3 hours -- prices often move more around releases, so the ranges are wider when an event falls inside them'); then one bullet containing the exact words 'no reliable lean': 'The up/down chance is close to 50/50 -- no reliable lean -- so treat it as a rough guide, not a promise.' " +
+  "(3b) After that block add a short section 'What is in the news' ONLY if market_context has headlines: 2-3 plain-language bullets summarising ONLY the headlines provided in market_context.headlines (each with its source and age_text, e.g. '(Reuters, 3 hours ago)'). NEVER add facts, numbers, causes or predictions that are not in those headlines, never say a headline will move the price a certain way, and end the section with: 'This is background context only -- it is not used to calculate the ranges or the up/down calls.' If market_context is null or has no headlines, skip the section (do not apologise). (4) The LAST line of the answer, in plain text with no asterisks or italics, EXACTLY: 'This is not financial advice. Do your own analysis before taking your investment decisions.' " +
   "NEVER describe the Up/Down percentage as accuracy, confidence or a 70% success rate, and never present a direction as certain. Do not add live-accuracy columns or long explanations; only if the user asks about accuracy or 'full details' add live_hit_rate_statement / data timing (base_price_as_of_utc) / method_note. " +
   "If short_term_ranges is null or status is stale_or_market_closed, say so plainly and do not invent ranges. " +
   "NEVER shift or re-anchor a range to imply direction. DO NOT headline predicted_price_usd. If directional_edge_status is 'unproven', never present 'prediction' or 'prediction_probability_up' as a forecast or probability. " +
