@@ -55,7 +55,7 @@ export function buildAnswerExtras(events, ctx) {
     }
     const hl = (ctx?.headlines || []).slice(0, 3);
     if (hl.length) {
-      news_block = "**What is in the news** (background only -- not used in any calculation):\n" +
+      news_block = "**What is in the news** (shown for context; the system is testing live whether headline sentiment predicts direction, and will only use it in the numbers if it proves it helps):\n" +
         hl.map((h) => `- ${h.headline} (${h.source}, ${h.age_text})`).join("\n");
     }
   } catch { /* extras are optional */ }
