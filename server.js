@@ -1118,6 +1118,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // bare statement, just the statement+note combo, or something
         // in between -- checking both catches more real cases.
         let marketClosedStatementOnly = null;
+        let requiredShortTermDirRecord = null;   // live self-scored up/down record sentence
         let requiredShortTermFooter = null;   // server-guaranteed 'how to read this' note under the short-term range table
         let closedMarketPriceLabel = null;
         let closedMarketPredictedPriceLabel = null;
@@ -1264,6 +1265,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
                 const parsedResult = JSON.parse(toolResult);
                 if (parsedResult.required_answer_footer) {
                   requiredShortTermFooter = parsedResult.required_answer_footer;
+                  requiredShortTermDirRecord = parsedResult.short_term_ranges?.direction_record_statement || null;
                 }
                 if (parsedResult.market_closed_statement) {
                   marketClosedStatementOnly = parsedResult.market_closed_statement;
@@ -1352,6 +1354,14 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // Guaranteed in code (GPT skipped this explanation, making the 'Chance higher / lower' column read like a forecast).
         if (requiredShortTermFooter && !answer.includes("no reliable lean")) {
           answer = `${answer}\n\n${requiredShortTermFooter}`;
+        } else if (requiredShortTermFooter) {
+          // The note is present; still guarantee the live direction record sentence and the closing disclaimer.
+          if (requiredShortTermDirRecord && !answer.includes("Live direction record")) {
+            answer = `${answer}\n\n${requiredShortTermDirRecord}`;
+          }
+          if (!/do your own analysis/i.test(answer)) {
+            answer = `${answer}\n\nThis is not financial advice. Do your own analysis before taking your investment decisions.`;
+          }
         }
 
         // PHRASING CONSISTENCY FIX (a confirmed real bug, observed in two

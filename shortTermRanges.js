@@ -33,6 +33,8 @@ async function fetchDirectionRecord(asset) {
   } catch { return null; }
 }
 
+export const DISCLAIMER = "This is not financial advice. Do your own analysis before taking your investment decisions.";
+
 const HORIZON_KEYS = ["10min", "20min", "30min", "60min"];
 
 export async function fetchShortTermRanges(asset, livePrice = null) {
@@ -125,9 +127,9 @@ export const SHORT_TERM_RANGE_INSTRUCTION =
   "KEEP IT SHORT AND PRACTICAL, in simple everyday words. Use EXACTLY this layout: " +
   "(1) FIRST LINE, in this form: 'Gold is currently at **$4,181.55** as of **October 13, 2026, 12:00:01 PM GMT+1**. Below are the estimated price ranges for the upcoming hour:' (use the real current price and time as instructed above; 'Oil' for oil). " +
   "(2) A table, one row per horizon (10, 20, 30, 60 minutes) with columns: In | Expected price (expected_price, ONE number) | Direction & chance (direction_display EXACTLY as given, e.g. 'Down 52% (coin flip -- not reliable)') | Likely range, 70% (downside_level - upside_level) | Almost certain range, 90% (very_likely_low - very_likely_high). Plain price levels, no +/- columns. " +
-  "(3) A short 'What this means' block of 2-3 plain bullets: the practical size of the move (e.g. 'Over the next 10 minutes gold will most likely stay within about $3 of the current price; over an hour, within about $5.'); " +
-  "'Likely range' = about 7 times out of 10, 'almost certain' = about 9 times out of 10; one bullet giving direction_record_statement EXACTLY as given (the live self-scored up/down record; if it is null skip this bullet), and one bullet containing the exact words 'no reliable lean': 'The up/down chance is close to 50/50 -- no reliable lean -- so treat it as a rough guide, not a promise.' " +
-  "(4) One short line: 'Not financial advice.' " +
+  "(3) A short 'What this means' block of 2-3 plain bullets: the practical size of the move (e.g. 'Over the next 10 minutes gold will most likely stay within about $3 of the current price; over an hour, within about $5.' -- use the LARGER of the up/down change_usd values for each horizon, rounded up); " +
+  "'Likely range' = about 7 times out of 10, 'almost certain' = about 9 times out of 10; one bullet giving direction_record_statement EXACTLY as given, ALWAYS, even when it only says the record is still building (the live self-scored up/down record; skip only if it is null), and one bullet containing the exact words 'no reliable lean': 'The up/down chance is close to 50/50 -- no reliable lean -- so treat it as a rough guide, not a promise.' " +
+  "(4) The LAST line of the answer, in plain text with no asterisks or italics, EXACTLY: 'This is not financial advice. Do your own analysis before taking your investment decisions.' " +
   "NEVER describe the Up/Down percentage as accuracy, confidence or a 70% success rate, and never present a direction as certain. Do not add live-accuracy columns or long explanations; only if the user asks about accuracy or 'full details' add live_hit_rate_statement / data timing (base_price_as_of_utc) / method_note. " +
   "If short_term_ranges is null or status is stale_or_market_closed, say so plainly and do not invent ranges. " +
   "NEVER shift or re-anchor a range to imply direction. DO NOT headline predicted_price_usd. If directional_edge_status is 'unproven', never present 'prediction' or 'prediction_probability_up' as a forecast or probability. " +
@@ -140,5 +142,5 @@ export function buildAnswerFooter(assetName, data, shortTerm) {
   if (!shortTerm || shortTerm.status !== "ok") return null;
   // Short fallback only -- appended in code when the model forgot to say there is no reliable lean.
   const rec = shortTerm.direction_record_statement ? ` ${shortTerm.direction_record_statement}` : "";
-  return `**Note:** these are likely trading ranges, not a forecast -- up or down is close to a coin flip, so there is no reliable lean.${rec} Not financial advice.`;
+  return `**Note:** these are likely trading ranges, not a forecast -- up or down is close to a coin flip, so there is no reliable lean.${rec} ${DISCLAIMER}`;
 }
