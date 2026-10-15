@@ -1364,7 +1364,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
           } else if (requiredShortTermDirRecord && !answer.includes("Live direction record")) {
             answer = `${answer}\n\n${requiredShortTermDirRecord}`;
           }
-          if (requiredShortTermExtras?.events_line && !/scheduled event/i.test(answer)) {
+          if (requiredShortTermExtras?.events_line && !/schedule[d]?\s+events?|in about [\d.]+ (hours?|minutes?)/i.test(answer)) {
             answer = `${answer}\n\n${requiredShortTermExtras.events_line}`;
           }
           if (requiredShortTermExtras?.news_block && !/what is in the news/i.test(answer)) {
