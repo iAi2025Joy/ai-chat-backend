@@ -176,6 +176,9 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
         direction_chance_pct: typeof r.chance_higher === "number" ? Math.round((0.5 + (r.chance_higher - 0.5) * dirWeight) * 100) : null,
         // Direction + chance, shown honestly: the raw lean (share of similar recent windows that ended higher) is only
         // trusted as far as the live record has measured real skill (dirWeight 0..1); with no measured edge it shows ~50%.
+        direction_basis: typeof r.chance_higher === "number"
+          ? `${Math.round(r.chance_higher * 100)}% of recent comparable ${k.replace("min", "")}-minute windows ended higher`
+          : null,
         direction_display: typeof r.chance_higher === "number"
           ? (() => {
               // The CALCULATED direction (share of similar past windows that ended higher) -- shown as Up/Down, together with
@@ -215,6 +218,12 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
       answer_extras,
       direction_live_record: direction_record,
       direction_record_statement: direction_record?.statement ?? null,
+      direction_calculation_statement: (() => {
+        const parts = HORIZON_KEYS.filter((k) => ranges[k]?.direction_basis).map((k) => `${k.replace("min", "")} min: ${ranges[k].direction_basis}`);
+        return parts.length
+          ? "How the direction is calculated: the system looks at recent comparable windows in the same trading session and counts how many ended higher; more than half = Up, fewer = Down. Right now -- " + parts.join("; ") + ". This is a count of past windows, not a probability of being right."
+          : null;
+      })(),
       accuracy_reading: direction_record && direction_record.accuracy_pct != null
         ? `Live direction accuracy: ${direction_record.accuracy_pct}% (${direction_record.n_scored} ten-minute calls scored so far; 50% = coin flip)`
         : null,
@@ -240,7 +249,7 @@ export const SHORT_TERM_RANGE_INSTRUCTION =
   "(1) FIRST LINE, in this form: 'Gold is currently at **$4,181.55** as of **October 13, 2026, 12:00:01 PM GMT+1**. Below are the estimated price ranges for the upcoming hour:' (use the real current price and time as instructed above; 'Oil' for oil). " +
   "(2) A table, one row per horizon (10, 20, 30, 60 minutes) with columns: In | Expected price (expected_price, ONE number) | Direction & chance (direction_display EXACTLY as given, character for character, the same wording on every row -- never turn it into 'Up' or 'Down' yourself) | Likely range, 70% (downside_level - upside_level) | Almost certain range, 90% (very_likely_low - very_likely_high). EVERY price in the table (expected price and both ranges) MUST carry a dollar sign and two decimals, e.g. '$4,143.37' and '$4,140.33 - $4,146.40'. Plain price levels, no +/- columns. Directly under the table, ALWAYS add one bold line: accuracy_reading EXACTLY as given (skip only if null). " +
   "(3) A short 'What this means' block of 2-3 plain bullets: the practical size of the move, quoted from typical_move_usd EXACTLY (e.g. 'Over the next 10 minutes gold will most likely stay within about $3.10 of the current price; over an hour, within about $5.70.' -- use each horizon's typical_move_usd, never the width of the range); " +
-  "'Likely range' = about 7 times out of 10, 'almost certain' = about 9 times out of 10; do NOT add a bullet for direction_record_statement (the accuracy line under the table and the server already carry it), and one bullet containing the exact words 'no reliable lean': 'The up/down chance is close to 50/50 -- no reliable lean -- so treat it as a rough guide, not a promise.' " +
+  "'Likely range' = about 7 times out of 10, 'almost certain' = about 9 times out of 10; add ONE bullet giving direction_calculation_statement EXACTLY as given (skip only if null); do NOT add a bullet for direction_record_statement (the accuracy line under the table and the server already carry it), and one bullet containing the exact words 'no reliable lean': 'The up/down chance is close to 50/50 -- no reliable lean -- so treat it as a rough guide, not a promise.' " +
   "(3b) Do NOT write any section about scheduled events or news headlines yourself: the server appends them verbatim after your answer. " +
   "(4) The LAST line of the answer, in plain text with no asterisks or italics, EXACTLY: 'This is not financial advice. Do your own analysis before taking your investment decisions.' " +
   "NEVER describe the Up/Down percentage as accuracy, confidence or a 70% success rate, and never present a direction as certain. Do not add live-accuracy columns or long explanations; only if the user asks about accuracy or 'full details' add live_hit_rate_statement / data timing (base_price_as_of_utc) / method_note. " +
