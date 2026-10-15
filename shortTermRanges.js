@@ -177,11 +177,15 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
         // trusted as far as the live record has measured real skill (dirWeight 0..1); with no measured edge it shows ~50%.
         direction_display: typeof r.chance_higher === "number"
           ? (() => {
-              const raw = r.chance_higher;
-              const shown = 0.5 + (raw - 0.5) * dirWeight;
-              const pct = Math.round((raw >= 0.5 ? shown : 1 - shown) * 100);
-              if (Math.abs(raw - 0.5) < 0.04) return "~50% either way (coin flip, no proven lean)";
-              return Math.abs(shown - 0.5) < 0.02 ? "~50% either way (coin flip, no proven lean)" : `${raw >= 0.5 ? "Up" : "Down"} ${pct}% (lean measured live)`;
+              // The CALCULATED direction (share of similar past windows that ended higher) -- shown as Up/Down, together with
+              // the measured live hit rate of exactly this method. The raw share is NOT shown as a probability.
+              const dir = r.chance_higher >= 0.5 ? "Up" : "Down";
+              if (Math.abs(r.chance_higher - 0.5) < 0.02) return `~50% either way (calculated: no clear lean)`;
+              const rec = direction_record;
+              const hit = rec && rec.accuracy_pct != null && rec.n_scored >= 30
+                ? (k === "10min" ? `live hit rate ${rec.accuracy_pct}% over ${rec.n_scored} calls` : `10-min live hit rate ${rec.accuracy_pct}%`)
+                : "live hit rate still building";
+              return `${dir} (calculated; ${hit}${dirWeight > 0 ? "" : " -- no proven edge"})`;
             })()
           : "about 50% / 50% (no reliable lean)",
         typical_move_usd: Math.round(Math.max(Math.abs(r.range_low * factor - ref), Math.abs(r.range_high * factor - ref)) * 100) / 100,
