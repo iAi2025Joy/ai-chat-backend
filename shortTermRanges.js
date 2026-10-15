@@ -37,6 +37,7 @@ async function fetchDirectionRecord(asset) {
       ci95_low_pct: Math.round(a.ci95_low * 1000) / 10,
       ci95_high_pct: Math.round(a.ci95_high * 1000) / 10,
       beats_coin_flip_significantly: a.p_vs_coin_flip < 0.01 && a.accuracy > 0.5,
+      horizons: a.horizons ?? {},
       statement: a.statement,
     };
   } catch { return null; }
@@ -182,9 +183,12 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
               const dir = r.chance_higher >= 0.5 ? "Up" : "Down";
               if (Math.abs(r.chance_higher - 0.5) < 0.02) return `~50% either way (calculated: no clear lean)`;
               const rec = direction_record;
-              const hit = rec && rec.accuracy_pct != null && rec.n_scored >= 30
-                ? (k === "10min" ? `live hit rate ${rec.accuracy_pct}% over ${rec.n_scored} calls` : `10-min live hit rate ${rec.accuracy_pct}%`)
-                : "live hit rate still building";
+              const hz = rec?.horizons?.[k];
+              const hit = k === "10min"
+                ? (rec && rec.accuracy_pct != null && rec.n_scored >= 30 ? `10-min live hit rate ${rec.accuracy_pct}% over ${rec.n_scored} calls` : "10-min live hit rate still building")
+                : (hz && hz.n_scored >= 30 && typeof hz.accuracy === "number"
+                    ? `${k.replace("min", "")}-min live hit rate ${Math.round(hz.accuracy * 1000) / 10}% over ${hz.n_scored} calls`
+                    : `${k.replace("min", "")}-min live hit rate still building (${hz?.n_scored ?? 0} calls)`);
               return `${dir} (calculated; ${hit}${dirWeight > 0 ? "" : " -- no proven edge"})`;
             })()
           : "about 50% / 50% (no reliable lean)",
