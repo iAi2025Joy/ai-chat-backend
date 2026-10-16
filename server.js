@@ -1121,6 +1121,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         let requiredShortTermExtras = null;      // {events_line, news_block} appended verbatim in code
         let requiredShortTermDirRecord = null;   // live self-scored up/down record sentence
         let requiredShortTermDirCells = null;    // {10:'...',20:'...'} exact Direction & chance cell text per horizon
+        let requiredShortTermAccuracy = null;    // bold live-accuracy line under the table
         let requiredShortTermFloorCeiling = null; // measured floor/ceiling sentence
         let requiredShortTermFooter = null;   // server-guaranteed 'how to read this' note under the short-term range table
         let closedMarketPriceLabel = null;
@@ -1271,6 +1272,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
                   requiredShortTermDirRecord = parsedResult.short_term_ranges?.direction_record_statement || null;
                   requiredShortTermExtras = parsedResult.short_term_ranges?.answer_extras || null;
                   requiredShortTermFloorCeiling = parsedResult.short_term_ranges?.floor_ceiling_statement || null;
+                  requiredShortTermAccuracy = parsedResult.short_term_ranges?.accuracy_reading || null;
                   try {
                     const rg = parsedResult.short_term_ranges?.ranges || {};
                     const cells = {};
@@ -1376,6 +1378,11 @@ app.post("/chat", rateLimitChat, async (req, res) => {
               return cells.join("|");
             }).join("\n");
           } catch { /* keep the model's table if anything is odd */ }
+        }
+        if (requiredShortTermAccuracy && !/live direction accuracy/i.test(answer)) {
+          const line = `**${requiredShortTermAccuracy}**`;
+          const at = answer.search(/\*{0,2}What this means/i);
+          answer = at >= 0 ? `${answer.slice(0, at)}${line}\n\n${answer.slice(at)}` : `${answer}\n\n${line}`;
         }
         if (requiredShortTermFloorCeiling && !/price floor and ceiling|chance the price stays above/i.test(answer)) {
           answer = answer.replace(/\n*\s*\*?This is not financial advice\.?[^\n]*\*?\s*$/i, "").trimEnd();

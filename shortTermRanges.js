@@ -188,7 +188,7 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
               // The CALCULATED direction (share of similar past windows that ended higher) -- shown as Up/Down, together with
               // the measured live hit rate of exactly this method. The raw share is NOT shown as a probability.
               const dir = r.chance_higher >= 0.5 ? "Up" : "Down";
-              if (Math.abs(r.chance_higher - 0.5) < 0.02) return `~50% either way (calculated: no clear lean)`;
+              
               const rec = direction_record;
               const hz = rec?.horizons?.[k];
               const hit = k === "10min"
@@ -196,7 +196,9 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
                 : (hz && hz.n_scored >= 30 && typeof hz.accuracy === "number"
                     ? `${k.replace("min", "")}-min live hit rate ${Math.round(hz.accuracy * 1000) / 10}% over ${hz.n_scored} calls`
                     : `${k.replace("min", "")}-min live hit rate still building (${hz?.n_scored ?? 0} calls)`);
-              return `${dir} (calculated; ${hit}${dirWeight > 0 ? "" : " -- no proven edge"})`;
+              const noLean = Math.abs(r.chance_higher - 0.5) < 0.02;
+              return noLean ? `~50% either way (calculated: no clear lean; ${hit})`
+                            : `${dir} (calculated; ${hit}${dirWeight > 0 ? "" : " -- no proven edge"})`;
             })()
           : "about 50% / 50% (no reliable lean)",
         typical_move_usd: Math.round(Math.max(Math.abs(r.range_low * factor - ref), Math.abs(r.range_high * factor - ref)) * 100) / 100,
