@@ -1709,6 +1709,12 @@ app.post("/chat", rateLimitChat, async (req, res) => {
     // HTML version) in its conversation history, so future turns don't
     // feed GPT its own previously-rendered <p>/<ul> tags as context.
     let formattedReply = convertLinksToHTML(formatMarkdownToHTML(answer));
+    if (/[▲▼]/.test(answer) && /\(calculated;/.test(answer)) {
+      // Phosphor-green up arrow / red down arrow for the calculated direction (plain text stays ▲ / ▼ in raw_reply).
+      formattedReply = formattedReply
+        .replace(/▲/g, '<span style="color:#39ff14;text-shadow:0 0 6px #39ff14;font-weight:700;font-size:1.15em;">▲</span>')
+        .replace(/▼/g, '<span style="color:#ff2a2a;text-shadow:0 0 6px #ff2a2a;font-weight:700;font-size:1.15em;">▼</span>');
+    }
 
     // The model sometimes improvises a fake "sandbox:/files/..." download
     // link (a convention from other chat products that does not exist

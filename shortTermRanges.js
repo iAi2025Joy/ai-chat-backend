@@ -197,8 +197,9 @@ export async function fetchShortTermRanges(asset, livePrice = null) {
                     ? `${k.replace("min", "")}-min live hit rate ${Math.round(hz.accuracy * 1000) / 10}% over ${hz.n_scored} calls`
                     : `${k.replace("min", "")}-min live hit rate still building (${hz?.n_scored ?? 0} calls)`);
               const noLean = Math.abs(r.chance_higher - 0.5) < 0.02;
+              const arrow = dir === "Up" ? "▲" : "▼";            // shown instead of the words Up / Down (coloured green / red by server.js)
               return noLean ? `~50% either way (calculated: no clear lean; ${hit})`
-                            : `${dir} (calculated; ${hit}${dirWeight > 0 ? "" : " -- no proven edge"})`;
+                            : `${arrow} (calculated; ${hit}${dirWeight > 0 ? "" : " -- no proven edge"})`;
             })()
           : "about 50% / 50% (no reliable lean)",
         typical_move_usd: Math.round(Math.max(Math.abs(r.range_low * factor - ref), Math.abs(r.range_high * factor - ref)) * 100) / 100,
