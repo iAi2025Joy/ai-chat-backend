@@ -1120,6 +1120,8 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         let marketClosedStatementOnly = null;
         let requiredShortTermExtras = null;      // {events_line, news_block} appended verbatim in code
         let requiredShortTermDirRecord = null;   // live self-scored up/down record sentence
+        let requiredShortTermDirCells = null;    // {10:'...',20:'...'} exact Direction & chance cell text per horizon
+        let requiredShortTermFloorCeiling = null; // measured floor/ceiling sentence
         let requiredShortTermFooter = null;   // server-guaranteed 'how to read this' note under the short-term range table
         let closedMarketPriceLabel = null;
         let closedMarketPredictedPriceLabel = null;
@@ -1268,6 +1270,13 @@ app.post("/chat", rateLimitChat, async (req, res) => {
                   requiredShortTermFooter = parsedResult.required_answer_footer;
                   requiredShortTermDirRecord = parsedResult.short_term_ranges?.direction_record_statement || null;
                   requiredShortTermExtras = parsedResult.short_term_ranges?.answer_extras || null;
+                  requiredShortTermFloorCeiling = parsedResult.short_term_ranges?.floor_ceiling_statement || null;
+                  try {
+                    const rg = parsedResult.short_term_ranges?.ranges || {};
+                    const cells = {};
+                    for (const h of [10, 20, 30, 60]) { const d = rg[`${h}min`]?.direction_display; if (d) cells[h] = d; }
+                    requiredShortTermDirCells = Object.keys(cells).length ? cells : null;
+                  } catch { /* optional */ }
                 }
                 if (parsedResult.market_closed_statement) {
                   marketClosedStatementOnly = parsedResult.market_closed_statement;
@@ -1355,6 +1364,23 @@ app.post("/chat", rateLimitChat, async (req, res) => {
 
         // Guaranteed in code (GPT skips optional sections): the "no reliable lean" note, the live direction record, scheduled
         // events, news headlines (quoted verbatim), and the closing disclaimer, which is always the LAST line.
+        if (requiredShortTermDirCells) {
+          // Direction & chance cells are written by code, not by the chat model, so the wording (and the live hit rate in it) is exact.
+          try {
+            answer = answer.split("\n").map((line) => {
+              const m = line.match(/^\s*\|\s*(10|20|30|60)\s*(?:mins?|minutes?|m)?\s*\|/i);
+              if (!m) return line;
+              const cells = line.split("|");               // ["", In, Expected, Direction, Likely, Almost, ""]
+              if (cells.length < 6) return line;
+              cells[3] = " " + requiredShortTermDirCells[Number(m[1])] + " ";
+              return cells.join("|");
+            }).join("\n");
+          } catch { /* keep the model's table if anything is odd */ }
+        }
+        if (requiredShortTermFloorCeiling && !/price floor and ceiling|chance the price stays above/i.test(answer)) {
+          answer = answer.replace(/\n*\s*\*?This is not financial advice\.?[^\n]*\*?\s*$/i, "").trimEnd();
+          answer = `${answer}\n\n**Price floor and ceiling:** ${requiredShortTermFloorCeiling.replace(/^Price floor and ceiling \(/, "(")}`;
+        }
         if (requiredShortTermFooter) {
           const DISCLAIMER = "This is not financial advice. Do your own analysis before taking your investment decisions.";
           // take any disclaimer the model wrote off the end so it can be re-added last
