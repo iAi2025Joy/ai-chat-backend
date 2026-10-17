@@ -283,3 +283,47 @@ export function buildAnswerFooter(assetName, data, shortTerm) {
   const rec = shortTerm.direction_record_statement ? ` ${shortTerm.direction_record_statement}` : "";
   return `**Note:** these are likely trading ranges, not a forecast -- up or down is close to a coin flip, so there is no reliable lean.${rec} ${DISCLAIMER}`;
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// MARKET CLOSED: answer for the reopening instead of "the next 60 minutes".
+// Uses weekend_gap.json (written daily by the "Update Weekend Gap Stats" workflow): how far the price moved between the
+// last trade before each closure and the first trade after it, over about two years. Quantiles of that distribution give
+// the 70% (15th-85th percentile) and 90% (5th-95th) ranges, so they are calibrated by construction, not guessed.
+const WEEKEND_GAP_URL = "https://raw.githubusercontent.com/iAi2025Joy/gold-predictor/main/weekend_gap.json";
+
+export async function buildOpeningForecast(asset, label, price, priceTimeText, reopensNote) {
+  try {
+    if (typeof price !== "number" || !(price > 0)) return null;
+    const resp = await fetch(WEEKEND_GAP_URL, { cache: "no-store" });
+    if (!resp.ok) return null;
+    const file = await resp.json();
+    const g = file?.assets?.[asset];
+    if (!g || !(g.n_gaps >= 20)) return null;
+    const usd = (n) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const at = (q) => price * Math.exp(q);
+    const exp = at(g.q50), lo70 = at(g.q15), hi70 = at(g.q85), lo90 = at(g.q05), hi90 = at(g.q95);
+    const upPct = Math.round(g.share_up * 100);
+    const lean = Math.abs(g.share_up - 0.5) < 0.05;
+    const dirCell = lean
+      ? `~50% either way (calculated: no clear lean; ${upPct}% of the last ${g.n_gaps} reopenings ended higher)`
+      : `${g.share_up > 0.5 ? "▲" : "▼"} (calculated; ${upPct}% of the last ${g.n_gaps} reopenings ended higher -- no proven edge)`;
+    const typical = Math.round(price * g.typical_abs_pct) / 100;
+    const reopenText = reopensNote ? ` Markets are expected to reopen ${reopensNote}.` : "";
+    return [
+      `${label} markets are currently closed.${reopenText}`,
+      "",
+      `${label} last traded at **${usd(price)}**${priceTimeText ? ` as of ${priceTimeText}` : ""}. Below is the estimated price when the market opens:`,
+      "",
+      "| When | Expected price | Direction & chance | Likely range (70%) | Almost certain range (90%) |",
+      "|---|---|---|---|---|",
+      `| At market opening | ${usd(exp)} | ${dirCell} | ${usd(lo70)} - ${usd(hi70)} | ${usd(lo90)} - ${usd(hi90)} |`,
+      "",
+      `- **Typical opening gap:** about ${usd(typical)} away from the last price (the median size of the ${g.n_gaps} closed-market gaps measured between ${g.first_gap} and ${g.last_gap}).`,
+      `- **How to read the ranges:** the real opening price should land inside the 70% range about 7 times out of 10, and inside the 90% range about 9 times out of 10. They come straight from how far the price actually moved across past closures, so they are measured, not guessed.`,
+      `- **Direction:** there is no reliable lean. Past reopenings are close to a coin flip, so the expected price is simply the last price, and the arrow/percentage shows only how often reopenings ended higher.`,
+      `- Once the market is open, GARNET returns to the usual 10 / 20 / 30 / 60-minute table.`,
+      "",
+      "This is not financial advice. Do your own analysis before taking your investment decisions.",
+    ].join("\n");
+  } catch { return null; }
+}

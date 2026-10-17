@@ -1118,6 +1118,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         // bare statement, just the statement+note combo, or something
         // in between -- checking both catches more real cases.
         let marketClosedStatementOnly = null;
+        let requiredOpeningForecast = null;     // closed market: complete answer about the reopening, built in code
         let requiredShortTermExtras = null;      // {events_line, news_block} appended verbatim in code
         let requiredShortTermDirRecord = null;   // live self-scored up/down record sentence
         let requiredShortTermDirCells = null;    // {10:'...',20:'...'} exact Direction & chance cell text per horizon
@@ -1280,6 +1281,7 @@ app.post("/chat", rateLimitChat, async (req, res) => {
                     requiredShortTermDirCells = Object.keys(cells).length ? cells : null;
                   } catch { /* optional */ }
                 }
+                if (parsedResult.opening_forecast_markdown) requiredOpeningForecast = parsedResult.opening_forecast_markdown;
                 if (parsedResult.market_closed_statement) {
                   marketClosedStatementOnly = parsedResult.market_closed_statement;
                   marketClosedPrefix = parsedResult.market_reopens_note
@@ -1363,6 +1365,8 @@ app.post("/chat", rateLimitChat, async (req, res) => {
         answer = marketClosedPrefix
           ? `${marketClosedPrefix}\n\n${finalContent}`
           : finalContent;
+
+        if (requiredOpeningForecast) answer = requiredOpeningForecast;   // closed market: replace whatever the model wrote
 
         // Guaranteed in code (GPT skips optional sections): the "no reliable lean" note, the live direction record, scheduled
         // events, news headlines (quoted verbatim), and the closing disclaimer, which is always the LAST line.

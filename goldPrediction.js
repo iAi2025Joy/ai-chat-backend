@@ -28,7 +28,7 @@
 // always-current price without the cost/latency of full retraining.
 
 import { fetchLiveGoldPrice } from "./liveGoldPrice.js";
-import { fetchShortTermRanges, SHORT_TERM_RANGE_INSTRUCTION, buildAnswerFooter } from "./shortTermRanges.js";
+import { fetchShortTermRanges, SHORT_TERM_RANGE_INSTRUCTION, buildAnswerFooter, buildOpeningForecast } from "./shortTermRanges.js";
 import { runLiveGoldInference } from "./goldLiveInference.js";
 
 // ------------------------------------------------------------------
@@ -472,6 +472,18 @@ export async function handleGoldPredictionCall(argsJson, userTimezone) {
     short_term_ranges: await fetchShortTermRanges("gold", freshPrice.currentPriceUsd),
   });
   response.required_answer_footer = buildAnswerFooter("Gold", data, response.short_term_ranges);
+  if (!marketStatus.isOpen) {
+    // Market closed: answer for the REOPENING (built in code from historical closed-market gaps), not "the next 60 minutes".
+    const openingMd = await buildOpeningForecast("gold", "Gold", freshPrice.currentPriceUsd, formattedLivePriceFetchedAt, marketStatus.formattedNextOpenAt);
+    if (openingMd) {
+      response.opening_forecast_markdown = openingMd;
+      response.short_term_ranges = null;
+      response.required_answer_footer = null;
+      response.important_context_for_the_model =
+        "MARKET CLOSED: opening_forecast_markdown is the complete, final answer. Output it EXACTLY as given, word for word, and add nothing before or after it. Ignore all other instructions about tables, ranges and footers.";
+      return JSON.stringify(response);
+    }
+  }
   response.important_context_for_the_model =
     (response.important_context_for_the_model ?? "") + " " + SHORT_TERM_RANGE_INSTRUCTION;
 
