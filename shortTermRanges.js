@@ -291,13 +291,53 @@ export function buildAnswerFooter(assetName, data, shortTerm) {
 // the 70% (15th-85th percentile) and 90% (5th-95th) ranges, so they are calibrated by construction, not guessed.
 const WEEKEND_GAP_URL = "https://raw.githubusercontent.com/iAi2025Joy/gold-predictor/main/weekend_gap.json";
 
+
+// Gap statistics: first the file written by the GitHub workflow; if it does not exist yet, compute the same numbers directly
+// from about two years of hourly Yahoo futures bars (cached for 12 hours in memory).
+const _gapCache = {};
+async function loadGapStats(asset) {
+  try {
+    const resp = await fetch(WEEKEND_GAP_URL, { cache: "no-store" });
+    if (resp.ok) {
+      const g = (await resp.json())?.assets?.[asset];
+      if (g && g.n_gaps >= 20) return g;
+    }
+  } catch { /* fall through */ }
+  const c = _gapCache[asset];
+  if (c && Date.now() - c.t < 12 * 3600 * 1000) return c.g;
+  try {
+    const sym = asset === "oil" ? "CL%3DF" : "GC%3DF";
+    const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?range=2y&interval=1h`, { headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const res = j?.chart?.result?.[0];
+    const ts = res?.timestamp || [], cl = res?.indicators?.quote?.[0]?.close || [];
+    const bars = [];
+    for (let i = 0; i < ts.length; i++) if (typeof cl[i] === "number" && cl[i] > 0) bars.push([ts[i], cl[i]]);
+    const rets = [];
+    let first = null, last = null;
+    for (let i = 1; i < bars.length; i++) {
+      if (bars[i][0] - bars[i - 1][0] > 40 * 3600) {
+        rets.push(Math.log(bars[i - 1][1] / bars[i][1]) * -1);
+        const d = new Date(bars[i - 1][0] * 1000).toISOString().slice(0, 10);
+        if (!first) first = d; last = d;
+      }
+    }
+    if (rets.length < 20) return null;
+    const sorted = [...rets].sort((a, b) => a - b);
+    const q = (p) => { const x = (sorted.length - 1) * p, lo = Math.floor(x), hi = Math.ceil(x); return sorted[lo] + (sorted[hi] - sorted[lo]) * (x - lo); };
+    const abs = rets.map(Math.abs).sort((a, b) => a - b);
+    const g = { n_gaps: rets.length, q05: q(0.05), q15: q(0.15), q50: q(0.5), q85: q(0.85), q95: q(0.95),
+      share_up: rets.filter((x) => x > 0).length / rets.length, typical_abs_pct: abs[Math.floor(abs.length / 2)] * 100, first_gap: first, last_gap: last };
+    _gapCache[asset] = { t: Date.now(), g };
+    return g;
+  } catch { return null; }
+}
+
 export async function buildOpeningForecast(asset, label, price, priceTimeText, reopensNote) {
   try {
     if (typeof price !== "number" || !(price > 0)) return null;
-    const resp = await fetch(WEEKEND_GAP_URL, { cache: "no-store" });
-    if (!resp.ok) return closedFallback(label, price, priceTimeText, reopensNote);
-    const file = await resp.json();
-    const g = file?.assets?.[asset];
+    const g = await loadGapStats(asset);
     if (!g || !(g.n_gaps >= 20)) return closedFallback(label, price, priceTimeText, reopensNote);
     const usd = (n) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const at = (q) => price * Math.exp(q);
