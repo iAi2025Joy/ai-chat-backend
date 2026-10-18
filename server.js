@@ -1366,7 +1366,8 @@ app.post("/chat", rateLimitChat, async (req, res) => {
           ? `${marketClosedPrefix}\n\n${finalContent}`
           : finalContent;
 
-        if (requiredOpeningForecast) answer = requiredOpeningForecast;   // closed market: replace whatever the model wrote
+        if (requiredOpeningForecast) answer = requiredOpeningForecast;
+        else if (marketClosedStatementOnly) answer = answer.split("\n").filter((l) => !/close to 50\/50 -- no reliable lean|not expected to show any significant movement/i.test(l)).join("\n");   // closed market: replace whatever the model wrote
 
         // Guaranteed in code (GPT skips optional sections): the "no reliable lean" note, the live direction record, scheduled
         // events, news headlines (quoted verbatim), and the closing disclaimer, which is always the LAST line.

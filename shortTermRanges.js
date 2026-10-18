@@ -295,18 +295,15 @@ export async function buildOpeningForecast(asset, label, price, priceTimeText, r
   try {
     if (typeof price !== "number" || !(price > 0)) return null;
     const resp = await fetch(WEEKEND_GAP_URL, { cache: "no-store" });
-    if (!resp.ok) return null;
+    if (!resp.ok) return closedFallback(label, price, priceTimeText, reopensNote);
     const file = await resp.json();
     const g = file?.assets?.[asset];
-    if (!g || !(g.n_gaps >= 20)) return null;
+    if (!g || !(g.n_gaps >= 20)) return closedFallback(label, price, priceTimeText, reopensNote);
     const usd = (n) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const at = (q) => price * Math.exp(q);
     const exp = at(g.q50), lo70 = at(g.q15), hi70 = at(g.q85), lo90 = at(g.q05), hi90 = at(g.q95);
     const upPct = Math.round(g.share_up * 100);
-    const lean = Math.abs(g.share_up - 0.5) < 0.05;
-    const dirCell = lean
-      ? `~50% either way (calculated: no clear lean; ${upPct}% of the last ${g.n_gaps} reopenings ended higher)`
-      : `${g.share_up > 0.5 ? "▲" : "▼"} (calculated; ${upPct}% of the last ${g.n_gaps} reopenings ended higher -- no proven edge)`;
+    const dirCell = `${g.share_up >= 0.5 ? "▲" : "▼"} (calculated; ${upPct}% of the last ${g.n_gaps} reopenings ended higher -- no proven edge)`;
     const typical = Math.round(price * g.typical_abs_pct) / 100;
     const reopenText = reopensNote ? ` Markets are expected to reopen ${reopensNote}.` : "";
     return [
@@ -320,10 +317,23 @@ export async function buildOpeningForecast(asset, label, price, priceTimeText, r
       "",
       `- **Typical opening gap:** about ${usd(typical)} away from the last price (the median size of the ${g.n_gaps} closed-market gaps measured between ${g.first_gap} and ${g.last_gap}).`,
       `- **How to read the ranges:** the real opening price should land inside the 70% range about 7 times out of 10, and inside the 90% range about 9 times out of 10. They come straight from how far the price actually moved across past closures, so they are measured, not guessed.`,
-      `- **Direction:** there is no reliable lean. Past reopenings are close to a coin flip, so the expected price is simply the last price, and the arrow/percentage shows only how often reopenings ended higher.`,
+      `- **Direction:** there is no reliable lean. Past reopenings are close to a coin flip, so the expected price is simply the last price, and the arrow shows only which way more of the past reopenings went.`,
       `- Once the market is open, GARNET returns to the usual 10 / 20 / 30 / 60-minute table.`,
       "",
       "This is not financial advice. Do your own analysis before taking your investment decisions.",
     ].join("\n");
-  } catch { return null; }
+  } catch { return closedFallback(label, price, priceTimeText, reopensNote); }
+}
+
+// Used when the weekend-gap statistics are not available yet: still no "next 60 minutes" table and no filler bullets.
+function closedFallback(label, price, priceTimeText, reopensNote) {
+  if (typeof price !== "number" || !(price > 0)) return null;
+  const usd = `$${price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return [
+    `${label} markets are currently closed.${reopensNote ? ` Markets are expected to reopen ${reopensNote}.` : ""}`,
+    "",
+    `${label} last traded at **${usd}**${priceTimeText ? ` as of ${priceTimeText}` : ""}. The estimated price range for the market opening is not available right now; the usual 10 / 20 / 30 / 60-minute ranges return once the market is open.`,
+    "",
+    "This is not financial advice. Do your own analysis before taking your investment decisions.",
+  ].join("\n");
 }
