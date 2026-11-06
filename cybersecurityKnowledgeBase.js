@@ -662,6 +662,11 @@ export const PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS = [
 // ------------------------------------------------------------------
 export const CYBERSECURITY_DAILY_UPDATE_CHUNKS = [
   {
+    "id": "daily-2026-11-06-1",
+    "title": "[2026-11-06] [United States] Urges Hardening of Industrial Refrigeration and Cold Chain Monitoring Systems",
+    "text": "The US Government, along with its partners, is emphasizing the need to enhance the security of industrial refrigeration and cold chain monitoring systems. This initiative is part of broader efforts to protect critical infrastructure from cyber threats. (Source: CISA (US), https://www.cisa.gov/resources-tools/resources/us-government-partners-urge-hardening-industrial-refrigeration-and-cold-chain-monitoring-systems)"
+  },
+  {
     "id": "daily-2026-09-24-1",
     "title": "[2026-09-24] [United States] Considerations for Critical Infrastructure Operators Working With Third-Party ICS Integrators",
     "text": "The guidance provided by CISA outlines key considerations for critical infrastructure operators when collaborating with third-party integrators for Industrial Control Systems (ICS). It emphasizes the importance of maintaining security postures during integration and the need for effective risk management practices in order to protect critical infrastructure. (Source: CISA (US), https://www.cisa.gov/resources-tools/resources/considerations-critical-infrastructure-operators-working-third-party-ics-integrators)"
