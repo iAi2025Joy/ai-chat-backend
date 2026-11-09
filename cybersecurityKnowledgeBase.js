@@ -662,6 +662,11 @@ export const PRIVACY_LAW_WEEKLY_UPDATE_CHUNKS = [
 // ------------------------------------------------------------------
 export const CYBERSECURITY_DAILY_UPDATE_CHUNKS = [
   {
+    "id": "daily-2026-11-09-1",
+    "title": "[2026-11-09] [United States] Urges Hardening of Industrial Refrigeration and Cold Chain Monitoring Systems",
+    "text": "The US government, in partnership with various agencies, has issued a recommendation for the hardening of industrial refrigeration and cold chain monitoring systems. This initiative is part of a broader effort to enhance the cybersecurity of critical infrastructure in the face of vulnerabilities. (Source: CISA (US), https://www.cisa.gov/resources-tools/resources/us-government-partners-urge-hardening-industrial-refrigeration-and-cold-chain-monitoring-systems)"
+  },
+  {
     "id": "daily-2026-11-08-1",
     "title": "[2026-11-08] [United States] Urges Hardening of Industrial Refrigeration and Cold Chain Monitoring Systems",
     "text": "The US government, in partnership with various organizations, is urging the hardening of industrial refrigeration and cold chain monitoring systems as part of efforts to protect critical infrastructure. This initiative highlights the importance of enhancing defenses against potential cyber threats that could impact these essential systems. (Source: CISA (US), https://www.cisa.gov/resources-tools/resources/us-government-partners-urge-hardening-industrial-refrigeration-and-cold-chain-monitoring-systems)"
